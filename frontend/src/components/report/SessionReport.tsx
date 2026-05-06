@@ -29,6 +29,24 @@ export function SessionReport({ report }: Props) {
   const totalFillers = fillerEntries.reduce((sum, [, n]) => sum + n, 0)
   const maxFillerCount = Math.max(...fillerEntries.map(([, n]) => n), 1)
 
+  // Session ended before any speech was captured (user bailed out early to retry).
+  if (report.chunks.length === 0 && summary.total_words === 0) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
+        <h1 className="text-xl font-semibold">No audio captured</h1>
+        <p className="text-gray-400 text-sm max-w-sm">
+          The session ended before we could record anything to analyze. Give it another go.
+        </p>
+        <Link
+          href="/session"
+          className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-sm font-medium transition-colors"
+        >
+          Practice again
+        </Link>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen py-12 px-4">
       <div className="max-w-3xl mx-auto space-y-8">

@@ -1,6 +1,6 @@
 /**
  * AudioWorklet processor — captures raw float32 PCM from the microphone
- * and posts chunks to the main thread every ~2 seconds.
+ * and posts ~250ms chunks to the main thread.
  *
  * Runs in the audio thread (not the main thread), so it never blocks the UI.
  */
@@ -9,8 +9,10 @@ class PCMProcessor extends AudioWorkletProcessor {
     super()
     this._chunks = []
     this._size = 0
-    // sampleRate is a global inside AudioWorkletGlobalScope
-    this._targetSize = sampleRate * 2 // 2 seconds of samples
+    // Small chunks so the user's first words reach the backend within ~250ms
+    // of being spoken — large chunks made the start of a session feel laggy.
+    // sampleRate is a global inside AudioWorkletGlobalScope.
+    this._targetSize = Math.floor(sampleRate * 0.25)
   }
 
   process(inputs) {

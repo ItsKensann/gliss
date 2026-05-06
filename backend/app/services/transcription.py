@@ -11,10 +11,6 @@ logger = logging.getLogger(__name__)
 TARGET_SR = 16_000  # Whisper expects 16 kHz
 MIN_TRANSCRIBE_SECONDS = 3.0  # Whisper degrades sharply on shorter clips — wait for context
 
-# Seeds the first transcription so Whisper doesn't hallucinate filler text on
-# silence/breath at session start. Replaced by rolling prior transcript thereafter.
-SEED_PROMPT = "The following is a speech coaching practice session."
-
 
 class TranscriptionService:
     """
@@ -73,8 +69,15 @@ class TranscriptionService:
             beam_size=5,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 500},
-            initial_prompt=self._last_text or SEED_PROMPT,
+            # No directive seed prompt on the first cycle — a strong prompt biases
+            # Whisper to fabricate coaching-style text on near-silence.
+            initial_prompt=self._last_text or None,
             condition_on_previous_text=True,
+            # Standard anti-hallucination thresholds: drop low-confidence segments
+            # and segments with hallucination-typical compression signatures.
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0,
         )
 
         segments: list[dict] = []

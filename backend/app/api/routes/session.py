@@ -176,10 +176,10 @@ async def session_websocket(
             min_seconds=1.0,
         )
 
+        # Always save a report — even an empty one — so the frontend's GET /report/{id}
+        # resolves instead of 404-looping. Short / silent sessions (e.g. user ended
+        # immediately to retry) get rendered as an empty-state report.
         ended_at = datetime.now(timezone.utc)
-        if chunks:
-            report = build_report(session_id, started_at, ended_at, chunks, full_transcript)
-            save_report(report)
-            logger.info("Session %s saved — %d chunks, %.0fs", session_id, len(chunks), report.duration_seconds)
-        else:
-            logger.info("Session %s ended with no transcribable audio", session_id)
+        report = build_report(session_id, started_at, ended_at, chunks, full_transcript)
+        save_report(report)
+        logger.info("Session %s saved — %d chunks, %.0fs", session_id, len(chunks), report.duration_seconds)
