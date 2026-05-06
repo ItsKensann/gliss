@@ -8,6 +8,7 @@ backend/__pycache__/
 backend/.env
 backend/venv/
 backend/.venv/
+backend/sessions/
 **/__pycache__/
 *.pyc
 *.pyo

@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(New-Item *)"
+      "PowerShell(New-Item *)",
+      "Read(//c/Users/ItsKe/.cache/huggingface/hub/models--Systran--faster-whisper-small/snapshots/536b0662742c02347bc0e980a01041f333bce120/**)",
+      "Read(//c/Users/ItsKe/.cache/huggingface/hub/models--Systran--faster-whisper-small/blobs/**)",
+      "Bash(\"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\\\\backend\\\\.venv\\\\Scripts\\\\huggingface-cli.exe\" download *)",
+      "Bash(\"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\\\\backend\\\\.venv\\\\Scripts\\\\hf.exe\" download *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/api/models/Systran/faster-whisper-small\" -UseBasicParsing -TimeoutSec 15; Write-Output \"HTTP $\\($r.StatusCode\\) - body length $\\($r.Content.Length\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/api/models/Systran/faster-whisper-small\" -UseBasicParsing -TimeoutSec 15; Write-Output \"HTTP $\\($r.StatusCode\\) - body length $\\($r.Content.Length\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $r = Invoke-WebRequest -Uri \"https://huggingface.co/api/models/Systran/faster-whisper-small\" -UseBasicParsing; $j = $r.Content | ConvertFrom-Json; $j.sha; \"---\"; $j.siblings | ForEach-Object { $_.rfilename })",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/Systran/faster-whisper-small/resolve/main/config.json\" -UseBasicParsing -TimeoutSec 30; Write-Output \"OK: $\\($r.StatusCode\\), $\\($r.Content.Length\\) bytes\"; Write-Output \"Final URL: $\\($r.BaseResponse.ResponseUri\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })"
     ]
   }
 }

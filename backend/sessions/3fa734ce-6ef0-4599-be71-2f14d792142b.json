@@ -1,0 +1,37 @@
+{
+  "session_id": "3fa734ce-6ef0-4599-be71-2f14d792142b",
+  "started_at": "2026-05-06T00:47:28.523124+00:00",
+  "ended_at": "2026-05-06T00:47:42.862383+00:00",
+  "duration_seconds": 14.3,
+  "full_transcript": "Hello, hello, hello.",
+  "chunks": [
+    {
+      "transcript": "Hello, hello, hello.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 290.3,
+        "baseline_wpm": 290.3,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 3,
+    "avg_wpm": 290.3,
+    "peak_wpm": 290.3,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

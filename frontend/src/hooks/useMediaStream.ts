@@ -6,10 +6,14 @@ export function useMediaStream() {
   const streamRef = useRef<MediaStream | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const workletRef = useRef<AudioWorkletNode | null>(null)
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const start = useCallback(
+  // Acquire mic/camera and instantiate the worklet, but don't wire the
+  // audio source to it yet. This lets the UI run a countdown after permissions
+  // are granted but before any audio is actually captured.
+  const prepare = useCallback(
     async (onChunk: (buffer: ArrayBuffer, sampleRate: number) => void) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -22,14 +26,14 @@ export function useMediaStream() {
         })
         streamRef.current = stream
 
-        // Use the browser's native sample rate — the worklet reports it back
-        // so the backend can resample correctly.
         const audioCtx = new AudioContext()
         audioCtxRef.current = audioCtx
 
         await audioCtx.audioWorklet.addModule("/audio-processor.js")
 
         const source = audioCtx.createMediaStreamSource(stream)
+        sourceRef.current = source
+
         const worklet = new AudioWorkletNode(audioCtx, "pcm-processor")
         workletRef.current = worklet
 
@@ -37,10 +41,6 @@ export function useMediaStream() {
           onChunk(event.data.pcm, event.data.sampleRate)
         }
 
-        source.connect(worklet)
-        // Worklet does not need to connect to destination — it only reads input.
-
-        setIsStreaming(true)
         setError(null)
         return stream
       } catch (err) {
@@ -52,7 +52,15 @@ export function useMediaStream() {
     []
   )
 
+  // Connect source → worklet so audio actually starts flowing to the backend.
+  const begin = useCallback(() => {
+    if (!sourceRef.current || !workletRef.current) return
+    sourceRef.current.connect(workletRef.current)
+    setIsStreaming(true)
+  }, [])
+
   const stop = useCallback(() => {
+    sourceRef.current?.disconnect()
     workletRef.current?.disconnect()
     workletRef.current?.port.close()
     audioCtxRef.current?.close()
@@ -60,8 +68,9 @@ export function useMediaStream() {
     streamRef.current = null
     audioCtxRef.current = null
     workletRef.current = null
+    sourceRef.current = null
     setIsStreaming(false)
   }, [])
 
-  return { start, stop, isStreaming, error, streamRef }
+  return { prepare, begin, stop, isStreaming, error, streamRef }
 }

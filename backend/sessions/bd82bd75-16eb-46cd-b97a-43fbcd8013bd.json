@@ -1,0 +1,83 @@
+{
+  "session_id": "bd82bd75-16eb-46cd-b97a-43fbcd8013bd",
+  "started_at": "2026-05-06T04:54:26.973096+00:00",
+  "ended_at": "2026-05-06T04:54:47.961543+00:00",
+  "duration_seconds": 21.0,
+  "full_transcript": "Hello, Test. Well, nice, so I got the first... one. Lisa Allen, according to our file, was...",
+  "chunks": [
+    {
+      "transcript": "Hello, Test.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 20.0,
+        "baseline_wpm": 20.0,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Well, nice, so I got the first...",
+      "filler_words": [
+        {
+          "word": "so",
+          "timestamp": 5.24,
+          "count": 1
+        }
+      ],
+      "speed": {
+        "current_wpm": 70.0,
+        "baseline_wpm": 70.0,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "one. Lisa Allen, according to our file, was...",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 120.0,
+        "baseline_wpm": 70.0,
+        "is_spike": false,
+        "spike_factor": 1.71
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 17,
+    "avg_wpm": 70.0,
+    "peak_wpm": 120.0,
+    "filler_counts": {
+      "so": 1
+    },
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "session_id": "6db6f5cb-a43c-4ea2-9a97-e04267dcc973",
+  "started_at": "2026-05-06T00:26:04.419698+00:00",
+  "ended_at": "2026-05-06T00:26:21.912346+00:00",
+  "duration_seconds": 17.5,
+  "full_transcript": "Hey!  Hey!  Hey!  Hey! I'm actually at the top of the stage in the city for the dashways to meet.  Science, I am current. the Immortal One in Balorant.",
+  "chunks": [
+    {
+      "transcript": "Hey!  Hey!  Hey!  Hey!",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 157.9,
+        "baseline_wpm": 157.9,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "I'm actually at the top of the stage in the city for the dashways to meet.  Science, I am current.",
+      "filler_words": [
+        {
+          "word": "actually",
+          "timestamp": 0.24,
+          "count": 1
+        }
+      ],
+      "speed": {
+        "current_wpm": 204.1,
+        "baseline_wpm": 204.1,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "the Immortal One in Balorant.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 220.6,
+        "baseline_wpm": 194.2,
+        "is_spike": false,
+        "spike_factor": 1.14
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 29,
+    "avg_wpm": 194.2,
+    "peak_wpm": 220.6,
+    "filler_counts": {
+      "actually": 1
+    },
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

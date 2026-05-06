@@ -1,0 +1,119 @@
+{
+  "session_id": "b3765a6a-1cdc-4b21-b619-939ac1a38364",
+  "started_at": "2026-05-06T00:28:01.920385+00:00",
+  "ended_at": "2026-05-06T00:28:40.360816+00:00",
+  "duration_seconds": 38.4,
+  "full_transcript": "My name is Ken Simputra. I graduated at Oregon State University with a bachelor's degree in computer science. and I am Model 1 in Ballard. Valorant There we go, okay, nice.",
+  "chunks": [
+    {
+      "transcript": "My name is Ken Simputra.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 168.5,
+        "baseline_wpm": 168.5,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "I graduated at Oregon State University with a bachelor's degree in computer science.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 131.3,
+        "baseline_wpm": 131.3,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "and I am Model 1 in Ballard.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 146.9,
+        "baseline_wpm": 148.9,
+        "is_spike": false,
+        "spike_factor": 0.99
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Valorant",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 42.9,
+        "baseline_wpm": 148.9,
+        "is_spike": false,
+        "spike_factor": 0.29
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "There we go, okay, nice.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 272.7,
+        "baseline_wpm": 148.9,
+        "is_spike": true,
+        "spike_factor": 1.83
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": true,
+        "suggested_pause_location": "at the next comma or period",
+        "reason": "You're rushing — a 1-2 second pause lets your audience absorb what you said"
+      },
+      "immediate_feedback": [
+        {
+          "message": "You're speaking 83% faster than your baseline — take a breath",
+          "type": "speed",
+          "severity": "warning"
+        }
+      ],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 31,
+    "avg_wpm": 152.5,
+    "peak_wpm": 272.7,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

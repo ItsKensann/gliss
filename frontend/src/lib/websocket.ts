@@ -1,10 +1,15 @@
 import { AnalysisResult, FaceMetrics } from "./types"
 
+// Cap the pre-open queue so a stuck handshake can't grow it without bound.
+// At 16kHz mono float32 + 4-byte header, this is roughly 5-10s of audio.
+const MAX_PENDING_PACKETS = 500
+
 export class GlissWebSocket {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
   private maxReconnects = 3
   private url = ""
+  private pendingPackets: ArrayBuffer[] = []
 
   constructor(
     private onAnalysis: (result: AnalysisResult) => void,
@@ -19,6 +24,11 @@ export class GlissWebSocket {
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0
+      // Flush any audio captured during the handshake so the first words aren't lost.
+      for (const packet of this.pendingPackets) {
+        this.ws?.send(packet)
+      }
+      this.pendingPackets = []
       this.onConnect()
     }
 
@@ -41,12 +51,18 @@ export class GlissWebSocket {
   }
 
   sendAudioChunk(buffer: ArrayBuffer, sampleRate: number): void {
-    if (this.ws?.readyState !== WebSocket.OPEN) return
     // Prepend a 4-byte little-endian uint32 sample rate so the backend can resample.
     const packet = new ArrayBuffer(4 + buffer.byteLength)
     new DataView(packet).setUint32(0, sampleRate, true)
     new Uint8Array(packet).set(new Uint8Array(buffer), 4)
-    this.ws.send(packet)
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(packet)
+    } else if (this.ws?.readyState === WebSocket.CONNECTING) {
+      if (this.pendingPackets.length < MAX_PENDING_PACKETS) {
+        this.pendingPackets.push(packet)
+      }
+    }
   }
 
   sendConfig(config: { ai_enabled: boolean }): void {
@@ -65,5 +81,6 @@ export class GlissWebSocket {
     this.maxReconnects = 0
     this.ws?.close()
     this.ws = null
+    this.pendingPackets = []
   }
 }

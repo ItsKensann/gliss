@@ -1,14 +1,24 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.report import router as report_router
 from app.api.routes.session import router as session_router
+from app.services.transcription import TranscriptionService
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Gliss API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm the Whisper model at startup so the first session doesn't pay the load cost.
+    TranscriptionService._get_model()
+    yield
+
+
+app = FastAPI(title="Gliss API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -9,6 +9,11 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 TARGET_SR = 16_000  # Whisper expects 16 kHz
+MIN_TRANSCRIBE_SECONDS = 3.0  # Whisper degrades sharply on shorter clips — wait for context
+
+# Seeds the first transcription so Whisper doesn't hallucinate filler text on
+# silence/breath at session start. Replaced by rolling prior transcript thereafter.
+SEED_PROMPT = "The following is a speech coaching practice session."
 
 
 class TranscriptionService:
@@ -21,13 +26,25 @@ class TranscriptionService:
         bytes 4+   : float32 LE PCM samples (mono)
     """
 
+    # Model weights are large (small ≈ 500 MB) and immutable. Load once and
+    # share across all sessions; per-session state stays on the instance.
+    _model: WhisperModel | None = None
+
+    @classmethod
+    def _get_model(cls) -> WhisperModel:
+        if cls._model is None:
+            logger.info("Loading Whisper model %r (one-time)", settings.whisper_model)
+            cls._model = WhisperModel(
+                settings.whisper_model,
+                device="cpu",
+                compute_type="int8",
+            )
+        return cls._model
+
     def __init__(self):
-        self.model = WhisperModel(
-            settings.whisper_model,
-            device="cpu",
-            compute_type="int8",
-        )
+        self.model = self._get_model()
         self._buffer = np.array([], dtype=np.float32)
+        self._last_text = ""  # carried into next chunk as initial_prompt for context continuity
 
     def add_chunk(self, data: bytes) -> None:
         if len(data) < 5:
@@ -41,11 +58,12 @@ class TranscriptionService:
         self._buffer = np.concatenate([self._buffer, pcm])
         logger.debug("PCM buffer: %.2fs", len(self._buffer) / TARGET_SR)
 
-    def transcribe_buffer(self) -> dict:
-        if len(self._buffer) < TARGET_SR:          # need ≥ 1 second
-            return {"text": "", "segments": []}
+    def transcribe_buffer(self, min_seconds: float = MIN_TRANSCRIBE_SECONDS) -> dict:
+        if len(self._buffer) < TARGET_SR * min_seconds:
+            return {"text": "", "segments": [], "audio_duration": 0.0}
 
         audio = self._buffer.copy()
+        audio_duration = len(audio) / TARGET_SR
         self._buffer = np.array([], dtype=np.float32)  # reset for next chunk
 
         segments_iter, _ = self.model.transcribe(
@@ -53,6 +71,10 @@ class TranscriptionService:
             language="en",
             word_timestamps=True,
             beam_size=5,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500},
+            initial_prompt=self._last_text or SEED_PROMPT,
+            condition_on_previous_text=True,
         )
 
         segments: list[dict] = []
@@ -66,8 +88,11 @@ class TranscriptionService:
             text_parts.append(seg.text)
 
         text = " ".join(text_parts).strip()
+        if text:
+            # Whisper's initial_prompt accepts ~224 tokens; a few hundred chars is safely under that.
+            self._last_text = (self._last_text + " " + text)[-500:]
         logger.info("Transcript: %r", text[:120])
-        return {"text": text, "segments": segments}
+        return {"text": text, "segments": segments, "audio_duration": audio_duration}
 
     def get_buffer_duration(self) -> float:
         return len(self._buffer) / TARGET_SR

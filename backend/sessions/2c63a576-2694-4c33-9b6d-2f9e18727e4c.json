@@ -1,0 +1,75 @@
+{
+  "session_id": "2c63a576-2694-4c33-9b6d-2f9e18727e4c",
+  "started_at": "2026-05-06T00:26:27.693657+00:00",
+  "ended_at": "2026-05-06T00:26:51.459593+00:00",
+  "duration_seconds": 23.8,
+  "full_transcript": "Hey. I agree in computer science, I am currently a mortal one in valor. it.",
+  "chunks": [
+    {
+      "transcript": "Hey.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 28.8,
+        "baseline_wpm": 28.8,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "I agree in computer science, I am currently a mortal one in valor.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 185.7,
+        "baseline_wpm": 185.7,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "it.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 26.1,
+        "baseline_wpm": 80.2,
+        "is_spike": false,
+        "spike_factor": 0.33
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 15,
+    "avg_wpm": 80.2,
+    "peak_wpm": 185.7,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

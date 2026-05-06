@@ -1,0 +1,75 @@
+{
+  "session_id": "3054042f-7c44-43c5-9eef-30daaee5385e",
+  "started_at": "2026-05-06T02:03:57.639676+00:00",
+  "ended_at": "2026-05-06T02:04:24.434914+00:00",
+  "duration_seconds": 26.8,
+  "full_transcript": "Oh. We studied for years old. I started smoking and drinking on year 16 and had struggled. with obesity for both of our lives.",
+  "chunks": [
+    {
+      "transcript": "Oh.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 10.0,
+        "baseline_wpm": 10.0,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "We studied for years old. I started smoking and drinking on year 16 and had struggled.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 120.0,
+        "baseline_wpm": 120.0,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "with obesity for both of our lives.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 70.0,
+        "baseline_wpm": 66.7,
+        "is_spike": false,
+        "spike_factor": 1.05
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 24,
+    "avg_wpm": 66.7,
+    "peak_wpm": 120.0,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

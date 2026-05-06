@@ -25,9 +25,10 @@ class AudioAnalysisService:
     ) -> tuple[list[FillerWord], SpeedAnalysis, list[Pause], list[ImmediateFeedback]]:
         segments = whisper_result.get("segments", [])
         text = whisper_result.get("text", "").lower().strip()
+        audio_duration = whisper_result.get("audio_duration", 0.0)
 
         filler_words = self._detect_fillers(segments)
-        speed = self._analyze_speed(segments, text)
+        speed = self._analyze_speed(text, audio_duration)
         pauses = self._detect_pauses(segments)
         feedback = self._generate_immediate_feedback(filler_words, speed, pauses)
 
@@ -64,8 +65,11 @@ class AudioAnalysisService:
 
         return found
 
-    def _analyze_speed(self, segments: list, text: str) -> SpeedAnalysis:
-        if not segments:
+    def _analyze_speed(self, text: str, audio_duration: float) -> SpeedAnalysis:
+        # WPM is over the actual audio window (including pauses), not the
+        # span of Whisper's segment timestamps — VAD compresses those and
+        # produced absurd values like 1200+ WPM on short bursts.
+        if audio_duration < 1.0 or not text:
             return SpeedAnalysis(
                 current_wpm=0,
                 baseline_wpm=self._baseline_wpm,
@@ -74,8 +78,7 @@ class AudioAnalysisService:
             )
 
         total_words = len(text.split())
-        duration = segments[-1].get("end", 0) - segments[0].get("start", 0)
-        current_wpm = (total_words / duration * 60) if duration > 0 else 0.0
+        current_wpm = total_words / audio_duration * 60
 
         self._wpm_history.append(current_wpm)
 

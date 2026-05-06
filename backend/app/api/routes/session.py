@@ -29,13 +29,19 @@ async def _run_transcription_cycle(
     chunks: list[AnalysisResult],
     loop: asyncio.AbstractEventLoop,
     with_ai: bool,
+    min_seconds: float | None = None,
 ) -> str:
     """
     Transcribe buffered audio, run local analysis, optionally call Claude,
     append to chunks, and send to the client.
     Returns the updated full_transcript string.
     """
-    result = await loop.run_in_executor(_whisper_executor, transcription.transcribe_buffer)
+    transcribe = (
+        transcription.transcribe_buffer
+        if min_seconds is None
+        else lambda: transcription.transcribe_buffer(min_seconds=min_seconds)
+    )
+    result = await loop.run_in_executor(_whisper_executor, transcribe)
     if not result["text"].strip():
         return full_transcript
 
@@ -156,6 +162,8 @@ async def session_websocket(
 
         # Always do a final transcription to capture audio buffered since
         # the last interval fired (covers short sessions and partial intervals).
+        # Use a low threshold here — we won't get another chance to capture
+        # the user's last words.
         full_transcript = await _run_transcription_cycle(
             websocket=websocket,
             transcription=transcription,
@@ -165,6 +173,7 @@ async def session_websocket(
             chunks=chunks,
             loop=loop,
             with_ai=False,  # Session is over; skip the Claude round-trip
+            min_seconds=1.0,
         )
 
         ended_at = datetime.now(timezone.utc)
