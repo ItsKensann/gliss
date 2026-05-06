@@ -1,0 +1,125 @@
+"use client"
+
+import Link from "next/link"
+import type { SessionReportData } from "@/lib/types"
+
+interface Props {
+  report: SessionReportData
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return m > 0 ? `${m}m ${s}s` : `${s}s`
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-gray-800/50 rounded-xl p-5 ring-1 ring-white/5">
+      <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">{label}</p>
+      <p className="text-2xl font-bold text-white">{value}</p>
+      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+export function SessionReport({ report }: Props) {
+  const { summary } = report
+  const fillerEntries = Object.entries(summary.filler_counts)
+  const totalFillers = fillerEntries.reduce((sum, [, n]) => sum + n, 0)
+  const maxFillerCount = Math.max(...fillerEntries.map(([, n]) => n), 1)
+
+  return (
+    <main className="min-h-screen py-12 px-4">
+      <div className="max-w-3xl mx-auto space-y-8">
+
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Session Report</h1>
+            <p className="text-gray-400 mt-1 text-sm">
+              {new Date(report.started_at).toLocaleDateString("en-US", {
+                weekday: "long", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              })}
+            </p>
+          </div>
+          <Link
+            href="/session"
+            className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-sm font-medium transition-colors"
+          >
+            Practice again
+          </Link>
+        </div>
+
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Duration" value={formatDuration(report.duration_seconds)} />
+          <StatCard label="Words spoken" value={summary.total_words.toLocaleString()} />
+          <StatCard
+            label="Avg pace"
+            value={`${summary.avg_wpm} WPM`}
+            sub={`Peak ${summary.peak_wpm} WPM`}
+          />
+          <StatCard
+            label="Coherence"
+            value={`${Math.round(summary.avg_coherence * 100)}%`}
+            sub={summary.avg_coherence >= 0.75 ? "Good focus" : "Needs work"}
+          />
+        </div>
+
+        {/* Filler words */}
+        {fillerEntries.length > 0 && (
+          <section className="bg-gray-800/50 rounded-xl p-5 ring-1 ring-white/5">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-4">
+              Filler words — {totalFillers} total
+            </h2>
+            <div className="space-y-2">
+              {fillerEntries.map(([word, count]) => (
+                <div key={word} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-300 w-24 shrink-0">"{word}"</span>
+                  <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-500/70 rounded-full"
+                      style={{ width: `${(count / maxFillerCount) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-400 w-6 text-right shrink-0">×{count}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Coach notes */}
+        {summary.coach_notes.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">
+              Coach feedback
+            </h2>
+            {summary.coach_notes.map((note, i) => (
+              <div
+                key={i}
+                className="bg-purple-500/10 border border-purple-400/20 rounded-xl px-5 py-4 text-purple-200 text-sm leading-relaxed"
+              >
+                {note}
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* Transcript */}
+        {report.full_transcript && (
+          <section className="bg-gray-800/50 rounded-xl p-5 ring-1 ring-white/5">
+            <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400 mb-3">
+              Transcript
+            </h2>
+            <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+              {report.full_transcript}
+            </p>
+          </section>
+        )}
+
+      </div>
+    </main>
+  )
+}

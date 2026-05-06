@@ -1,0 +1,56 @@
+{
+  "session_id": "7082860d-32de-4d5f-98c8-91d337392418",
+  "started_at": "2026-05-05T20:15:43.676819+00:00",
+  "ended_at": "2026-05-05T20:16:02.070559+00:00",
+  "duration_seconds": 18.4,
+  "full_transcript": "Hey, this is a second session. going to fill it with a lot of filler words, like, okay. Let's see if...",
+  "chunks": [
+    {
+      "transcript": "Hey, this is a second session.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 185.6,
+        "baseline_wpm": 185.6,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "going to fill it with a lot of filler words, like, okay. Let's see if...",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 110.6,
+        "baseline_wpm": 110.6,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 21,
+    "avg_wpm": 148.1,
+    "peak_wpm": 185.6,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

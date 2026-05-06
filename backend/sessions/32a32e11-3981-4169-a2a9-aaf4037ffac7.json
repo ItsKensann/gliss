@@ -1,0 +1,108 @@
+{
+  "session_id": "32a32e11-3981-4169-a2a9-aaf4037ffac7",
+  "started_at": "2026-05-05T23:43:33.545835+00:00",
+  "ended_at": "2026-05-05T23:44:17.364705+00:00",
+  "duration_seconds": 43.8,
+  "full_transcript": "To help businesses improve their... Solutions Hey, yeah, so my most recent experience comes from from",
+  "chunks": [
+    {
+      "transcript": "To help businesses improve their...",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 104.9,
+        "baseline_wpm": 104.9,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Solutions",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 35.3,
+        "baseline_wpm": 35.3,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Hey, yeah, so my most recent experience comes from",
+      "filler_words": [
+        {
+          "word": "so",
+          "timestamp": 1.88,
+          "count": 1
+        }
+      ],
+      "speed": {
+        "current_wpm": 177.6,
+        "baseline_wpm": 105.9,
+        "is_spike": true,
+        "spike_factor": 1.68
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": true,
+        "suggested_pause_location": "at the next comma or period",
+        "reason": "You're rushing — a 1-2 second pause lets your audience absorb what you said"
+      },
+      "immediate_feedback": [
+        {
+          "message": "You're speaking 68% faster than your baseline — take a breath",
+          "type": "speed",
+          "severity": "warning"
+        }
+      ],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "from",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 120.0,
+        "baseline_wpm": 105.9,
+        "is_spike": false,
+        "spike_factor": 1.13
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 16,
+    "avg_wpm": 109.5,
+    "peak_wpm": 177.6,
+    "filler_counts": {
+      "so": 1
+    },
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

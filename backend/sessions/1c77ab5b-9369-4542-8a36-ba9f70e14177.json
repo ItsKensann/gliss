@@ -1,0 +1,64 @@
+{
+  "session_id": "1c77ab5b-9369-4542-8a36-ba9f70e14177",
+  "started_at": "2026-05-05T20:16:30.729065+00:00",
+  "ended_at": "2026-05-05T20:17:18.657531+00:00",
+  "duration_seconds": 47.9,
+  "full_transcript": "Hey, so working the easy stuff for Now, make sure the web API is working.  Data is being processed from. the web RTC to the backend, generates transcript, get feedback, now",
+  "chunks": [
+    {
+      "transcript": "Hey, so working the easy stuff for",
+      "filler_words": [
+        {
+          "word": "so",
+          "timestamp": 1.8,
+          "count": 1
+        }
+      ],
+      "speed": {
+        "current_wpm": 130.4,
+        "baseline_wpm": 130.4,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Now, make sure the web API is working.  Data is being processed from.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 136.8,
+        "baseline_wpm": 136.8,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 31,
+    "avg_wpm": 133.6,
+    "peak_wpm": 136.8,
+    "filler_counts": {
+      "so": 1
+    },
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}

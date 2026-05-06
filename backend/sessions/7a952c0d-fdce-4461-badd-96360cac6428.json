@@ -1,0 +1,119 @@
+{
+  "session_id": "7a952c0d-fdce-4461-badd-96360cac6428",
+  "started_at": "2026-05-05T20:36:09.192707+00:00",
+  "ended_at": "2026-05-05T20:36:43.068739+00:00",
+  "duration_seconds": 33.9,
+  "full_transcript": "Hey, it touched us, this is the CIF. This session feature is working, um, I see. there is a bug if the session gets cut off Before I finish my sentence, the actual transcript is not. And I'm finished.",
+  "chunks": [
+    {
+      "transcript": "Hey, it touched us, this is the CIF.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 138.7,
+        "baseline_wpm": 138.7,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "This session feature is working, um, I see.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 81.6,
+        "baseline_wpm": 81.6,
+        "is_spike": false,
+        "spike_factor": 1.0
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "there is a bug if the session gets cut off",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 102.7,
+        "baseline_wpm": 107.7,
+        "is_spike": false,
+        "spike_factor": 0.95
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": 1.0,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "Before I finish my sentence, the actual transcript is not.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 104.9,
+        "baseline_wpm": 107.7,
+        "is_spike": false,
+        "spike_factor": 0.97
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": false,
+        "suggested_pause_location": null,
+        "reason": null
+      },
+      "immediate_feedback": [],
+      "coherence_score": null,
+      "ai_feedback": ""
+    },
+    {
+      "transcript": "And I'm finished.",
+      "filler_words": [],
+      "speed": {
+        "current_wpm": 157.9,
+        "baseline_wpm": 107.7,
+        "is_spike": true,
+        "spike_factor": 1.47
+      },
+      "pauses": [],
+      "breath_advice": {
+        "should_pause": true,
+        "suggested_pause_location": "at the next comma or period",
+        "reason": "You're rushing — a 1-2 second pause lets your audience absorb what you said"
+      },
+      "immediate_feedback": [
+        {
+          "message": "You're speaking 47% faster than your baseline — take a breath",
+          "type": "speed",
+          "severity": "warning"
+        }
+      ],
+      "coherence_score": null,
+      "ai_feedback": ""
+    }
+  ],
+  "summary": {
+    "total_words": 39,
+    "avg_wpm": 117.2,
+    "peak_wpm": 157.9,
+    "filler_counts": {},
+    "total_pauses": 0,
+    "avg_coherence": 1.0,
+    "coach_notes": []
+  }
+}
