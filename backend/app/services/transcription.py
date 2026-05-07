@@ -60,7 +60,11 @@ class TranscriptionService:
 
         audio = self._buffer.copy()
         audio_duration = len(audio) / TARGET_SR
-        self._buffer = np.array([], dtype=np.float32)  # reset for next chunk
+        # Snapshot how many samples we're transcribing. We only drop them from
+        # the buffer if Whisper actually returns text — the small int8 model
+        # often returns empty on short / quiet clips (VAD trim, no-speech
+        # threshold), and silently discarding the audio loses the user's words.
+        consumed = len(audio)
 
         segments_iter, _ = self.model.transcribe(
             audio,
@@ -92,9 +96,20 @@ class TranscriptionService:
 
         text = " ".join(text_parts).strip()
         if text:
+            # Drop just the samples we transcribed. Anything that streamed in
+            # while Whisper was running stays in the buffer for the next cycle.
+            self._buffer = self._buffer[consumed:]
             # Whisper's initial_prompt accepts ~224 tokens; a few hundred chars is safely under that.
             self._last_text = (self._last_text + " " + text)[-500:]
-        logger.info("Transcript: %r", text[:120])
+            logger.info("Transcript: %r", text[:120])
+        else:
+            # Whisper returned nothing — keep the audio so the next cycle can
+            # retry with more context. Cap at 30s so a fully silent session
+            # doesn't grow without bound.
+            max_keep = int(TARGET_SR * 30)
+            if len(self._buffer) > max_keep:
+                self._buffer = self._buffer[-max_keep:]
+            logger.info("Transcript empty — kept %.2fs buffered for retry", len(self._buffer) / TARGET_SR)
         return {"text": text, "segments": segments, "audio_duration": audio_duration}
 
     def get_buffer_duration(self) -> float:

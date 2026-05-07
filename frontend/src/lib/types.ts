@@ -38,6 +38,8 @@ export interface AnalysisResult {
   immediate_feedback: ImmediateFeedback[]
   coherence_score?: number
   ai_feedback?: string
+  start_offset_seconds?: number
+  end_offset_seconds?: number
 }
 
 export interface FaceMetrics {
@@ -65,6 +67,14 @@ export interface SessionSummary {
   coach_notes: string[]
 }
 
+export interface SessionListItem {
+  session_id: string
+  started_at: string
+  duration_seconds: number
+  total_words: number
+  prompt?: string
+}
+
 export interface SessionReportData {
   session_id: string
   started_at: string
@@ -73,4 +83,7 @@ export interface SessionReportData {
   full_transcript: string
   chunks: AnalysisResult[]
   summary: SessionSummary
+  prompt?: string
+  target_duration_seconds?: number
+  is_finalized?: boolean
 }

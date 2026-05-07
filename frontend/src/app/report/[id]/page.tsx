@@ -20,13 +20,23 @@ export default function ReportPage() {
     const load = async () => {
       try {
         const res = await fetch(`${API}/api/v1/report/${id}`)
-        if (res.status === 404 && attempts < 20) {
-          // Backend may still be finishing Whisper + saving — retry for up to 40s
-          setTimeout(() => setAttempts((n) => n + 1), 2000)
+        if (res.status === 404 && attempts < 60) {
+          // Backend may still be finishing Whisper + saving — retry for up to 30s.
+          // Tight 500ms interval so the report renders within ~half a second of
+          // the file landing, not up to two seconds later.
+          setTimeout(() => setAttempts((n) => n + 1), 500)
           return
         }
         if (!res.ok) { setError(true); return }
-        setReport(await res.json())
+        const data: SessionReportData = await res.json()
+        setReport(data)
+        // Backend writes a preliminary report (is_finalized=false) so the user
+        // sees results immediately, then re-saves once the final transcription
+        // cycle picks up trailing audio. Keep polling until the finalized
+        // version lands so trailing words appear without a manual refresh.
+        if (data.is_finalized === false && attempts < 60) {
+          setTimeout(() => setAttempts((n) => n + 1), 1500)
+        }
       } catch {
         setError(true)
       }
@@ -45,7 +55,7 @@ export default function ReportPage() {
   }
 
   if (!report) {
-    const isSlowSave = attempts > 5
+    const isSlowSave = attempts > 20
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-2">
         <div className="flex items-center gap-3 text-gray-400">

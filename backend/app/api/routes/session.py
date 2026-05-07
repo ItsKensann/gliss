@@ -10,7 +10,7 @@ from app.models.session import AnalysisResult, FaceMetrics
 from app.services.audio_analysis import AudioAnalysisService
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
-from app.services.transcription import TranscriptionService
+from app.services.transcription import MIN_TRANSCRIBE_SECONDS, TranscriptionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,6 +29,7 @@ async def _run_transcription_cycle(
     chunks: list[AnalysisResult],
     loop: asyncio.AbstractEventLoop,
     with_ai: bool,
+    anchor_ref: list,  # [datetime | None] — anchor for chunk offsets; first audio time
     min_seconds: float | None = None,
 ) -> str:
     """
@@ -66,6 +67,11 @@ async def _run_transcription_cycle(
         except Exception as e:
             logger.warning("AI feedback error (skipping for this chunk): %s", e)
 
+    audio_duration = float(result.get("audio_duration") or 0.0)
+    anchor = anchor_ref[0] or datetime.now(timezone.utc)
+    end_offset = (datetime.now(timezone.utc) - anchor).total_seconds()
+    start_offset = max(0.0, end_offset - audio_duration)
+
     output = AnalysisResult(
         transcript=chunk_text,
         filler_words=fillers,
@@ -75,6 +81,8 @@ async def _run_transcription_cycle(
         immediate_feedback=immediate_feedback,
         coherence_score=coherence,
         ai_feedback=ai_fb,
+        start_offset_seconds=round(start_offset, 2),
+        end_offset_seconds=round(end_offset, 2),
     )
     chunks.append(output)
 
@@ -99,6 +107,13 @@ async def session_websocket(
     # Wrap in a list so the nested async function can mutate it without nonlocal
     face_metrics_ref = [FaceMetrics(eye_contact_score=1.0, head_stability=1.0, timestamp=0)]
     ai_enabled_ref = [False]  # off by default during dev — client must opt in via "config" message
+    prompt_ref: list[str | None] = [None]
+    target_duration_ref: list[float | None] = [None]
+    # Stamped on first audio frame received and on the user's "stop" control
+    # message. These — not the WS accept/disconnect times — are what define the
+    # session's actual recording window for the report.
+    first_audio_at_ref: list[datetime | None] = [None]
+    recording_end_at_ref: list[datetime | None] = [None]
     full_transcript = ""
     chunks: list[AnalysisResult] = []
     started_at = datetime.now(timezone.utc)
@@ -107,6 +122,28 @@ async def session_websocket(
 
     async def run_analysis():
         nonlocal full_transcript
+
+        # First cycle: poll the buffer so transcription fires as soon as we have
+        # enough audio, instead of waiting a flat ANALYSIS_INTERVAL. Without this,
+        # the user sees a ~7s gap between countdown end and first feedback.
+        while transcription.get_buffer_duration() < MIN_TRANSCRIBE_SECONDS:
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=0.25)
+                return
+            except asyncio.TimeoutError:
+                pass
+
+        full_transcript = await _run_transcription_cycle(
+            websocket=websocket,
+            transcription=transcription,
+            analysis=analysis,
+            face_metrics_ref=face_metrics_ref,
+            full_transcript=full_transcript,
+            chunks=chunks,
+            loop=loop,
+            with_ai=ai_enabled_ref[0],
+            anchor_ref=first_audio_at_ref,
+        )
 
         while True:
             try:
@@ -124,6 +161,7 @@ async def session_websocket(
                 chunks=chunks,
                 loop=loop,
                 with_ai=ai_enabled_ref[0],
+                anchor_ref=first_audio_at_ref,
             )
 
     analysis_task = asyncio.create_task(run_analysis())
@@ -134,6 +172,8 @@ async def session_websocket(
             if data.get("type") == "websocket.disconnect":
                 break
             if "bytes" in data:
+                if first_audio_at_ref[0] is None:
+                    first_audio_at_ref[0] = datetime.now(timezone.utc)
                 transcription.add_chunk(data["bytes"])
             elif "text" in data:
                 try:
@@ -145,8 +185,22 @@ async def session_websocket(
                             timestamp=msg.get("timestamp", 0),
                         )
                     elif msg.get("type") == "config":
-                        ai_enabled_ref[0] = bool(msg.get("ai_enabled", True))
-                        logger.info("AI feedback %s", "enabled" if ai_enabled_ref[0] else "disabled")
+                        if "ai_enabled" in msg:
+                            ai_enabled_ref[0] = bool(msg["ai_enabled"])
+                            logger.info("AI feedback %s", "enabled" if ai_enabled_ref[0] else "disabled")
+                        if "prompt" in msg:
+                            prompt_ref[0] = msg["prompt"] or None
+                        if "target_duration_seconds" in msg:
+                            tds = msg["target_duration_seconds"]
+                            target_duration_ref[0] = float(tds) if tds is not None else None
+                    elif msg.get("type") == "control" and msg.get("action") == "stop":
+                        # User signaled session end (timer hit 0 or End clicked).
+                        # Stamp the recording end NOW — any audio that arrives during
+                        # the client's wrap-up buffer is captured into the transcript
+                        # but doesn't extend the reported session duration.
+                        if recording_end_at_ref[0] is None:
+                            recording_end_at_ref[0] = datetime.now(timezone.utc)
+                            logger.info("Recording end signaled by client")
                 except json.JSONDecodeError:
                     pass
     except (WebSocketDisconnect, RuntimeError):
@@ -160,26 +214,57 @@ async def session_websocket(
         except (asyncio.TimeoutError, Exception):
             analysis_task.cancel()
 
-        # Always do a final transcription to capture audio buffered since
-        # the last interval fired (covers short sessions and partial intervals).
-        # Use a low threshold here — we won't get another chance to capture
-        # the user's last words.
-        full_transcript = await _run_transcription_cycle(
-            websocket=websocket,
-            transcription=transcription,
-            analysis=analysis,
-            face_metrics_ref=face_metrics_ref,
-            full_transcript=full_transcript,
-            chunks=chunks,
-            loop=loop,
-            with_ai=False,  # Session is over; skip the Claude round-trip
-            min_seconds=1.0,
+        # Report timestamps describe the *recording window* — not the WS lifetime.
+        # started_at: first audio frame received (falls back to WS accept time
+        #   if no audio ever arrived, e.g. an immediate cancel).
+        # ended_at: time the client signaled stop (falls back to now if the WS
+        #   was killed without a control message — older clients or crashes).
+        report_started_at = first_audio_at_ref[0] or started_at
+        report_ended_at = recording_end_at_ref[0] or datetime.now(timezone.utc)
+
+        def _save(is_finalized: bool) -> None:
+            report = build_report(
+                session_id,
+                report_started_at,
+                report_ended_at,
+                chunks,
+                full_transcript,
+                prompt=prompt_ref[0],
+                target_duration_seconds=target_duration_ref[0],
+                is_finalized=is_finalized,
+            )
+            save_report(report)
+
+        # Save what we have NOW so the frontend stops polling 404s and can render
+        # immediately. The final transcription cycle below picks up trailing
+        # audio that arrived during the in-flight Whisper run plus the wrap-up
+        # buffer; we re-save when it's done, and the frontend re-fetches because
+        # is_finalized=False.
+        _save(is_finalized=False)
+        logger.info(
+            "Session %s preliminary save — %d chunks (running final cycle)",
+            session_id, len(chunks),
         )
 
-        # Always save a report — even an empty one — so the frontend's GET /report/{id}
-        # resolves instead of 404-looping. Short / silent sessions (e.g. user ended
-        # immediately to retry) get rendered as an empty-state report.
-        ended_at = datetime.now(timezone.utc)
-        report = build_report(session_id, started_at, ended_at, chunks, full_transcript)
-        save_report(report)
-        logger.info("Session %s saved — %d chunks, %.0fs", session_id, len(chunks), report.duration_seconds)
+        try:
+            full_transcript = await _run_transcription_cycle(
+                websocket=websocket,
+                transcription=transcription,
+                analysis=analysis,
+                face_metrics_ref=face_metrics_ref,
+                full_transcript=full_transcript,
+                chunks=chunks,
+                loop=loop,
+                with_ai=False,  # Session is over; skip the Claude round-trip
+                anchor_ref=first_audio_at_ref,
+                min_seconds=1.0,
+            )
+        except Exception:
+            logger.exception("Final transcription cycle failed; saving as-is")
+
+        _save(is_finalized=True)
+        logger.info(
+            "Session %s finalized — %d chunks, %.0fs",
+            session_id, len(chunks),
+            (report_ended_at - report_started_at).total_seconds(),
+        )

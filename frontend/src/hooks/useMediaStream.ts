@@ -14,7 +14,11 @@ export function useMediaStream() {
   // audio source to it yet. This lets the UI run a countdown after permissions
   // are granted but before any audio is actually captured.
   const prepare = useCallback(
-    async (onChunk: (buffer: ArrayBuffer, sampleRate: number) => void) => {
+    async (
+      onChunk: (buffer: ArrayBuffer, sampleRate: number) => void,
+      opts: { withCamera?: boolean } = {},
+    ) => {
+      const { withCamera = true } = opts
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -22,7 +26,7 @@ export function useMediaStream() {
             echoCancellation: true,
             noiseSuppression: true,
           },
-          video: { width: 640, height: 480, frameRate: 30 },
+          video: withCamera ? { width: 640, height: 480, frameRate: 30 } : false,
         })
         streamRef.current = stream
 

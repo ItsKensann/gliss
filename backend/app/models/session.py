@@ -48,6 +48,8 @@ class AnalysisResult(BaseModel):
     immediate_feedback: list[ImmediateFeedback]
     coherence_score: Optional[float] = None
     ai_feedback: Optional[str] = None
+    start_offset_seconds: float = 0.0
+    end_offset_seconds: float = 0.0
 
 
 class SessionSummary(BaseModel):
@@ -60,6 +62,15 @@ class SessionSummary(BaseModel):
     coach_notes: list[str]              # ai_feedback messages, deduplicated
 
 
+class SessionListItem(BaseModel):
+    """Brief metadata for the past-sessions list — avoids shipping every chunk."""
+    session_id: str
+    started_at: str
+    duration_seconds: float
+    total_words: int
+    prompt: Optional[str] = None
+
+
 class SessionReport(BaseModel):
     session_id: str
     started_at: str                     # ISO-8601
@@ -68,3 +79,11 @@ class SessionReport(BaseModel):
     full_transcript: str
     chunks: list[AnalysisResult]
     summary: SessionSummary
+    prompt: Optional[str] = None
+    target_duration_seconds: Optional[float] = None
+    # False while the backend is still finishing the final transcription
+    # cycle that captures trailing audio. The report file is saved twice:
+    # once preliminary (is_finalized=False) so the user can see results
+    # immediately, then again with is_finalized=True after the trailing
+    # cycle completes. Frontend keeps polling until True.
+    is_finalized: bool = True

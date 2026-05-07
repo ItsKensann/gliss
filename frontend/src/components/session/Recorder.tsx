@@ -19,7 +19,20 @@ function MetricPill({ label, value, highlight }: { label: string; value: string;
   )
 }
 
-export function Recorder() {
+function formatRemaining(ms: number): string {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000))
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${s.toString().padStart(2, "0")}`
+}
+
+interface RecorderProps {
+  durationSec?: number | null
+  prompt?: string
+  withCamera?: boolean
+}
+
+export function Recorder({ durationSec = null, prompt, withCamera = true }: RecorderProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [eyeContactScore] = useState(1.0)
   const [headStability] = useState(1.0)
@@ -32,6 +45,7 @@ export function Recorder() {
     aiEnabled,
     phase,
     countdown,
+    remainingMs,
     streamRef,
     startSession,
     stopSession,
@@ -39,16 +53,18 @@ export function Recorder() {
   } = useSession()
 
   useEffect(() => {
-    if (streamRef.current && videoRef.current) {
+    if (withCamera && streamRef.current && videoRef.current) {
       videoRef.current.srcObject = streamRef.current
     }
-  }, [isRecording, phase, streamRef])
+  }, [isRecording, phase, streamRef, withCamera])
 
   const statusText =
     phase === "preparing"
       ? "Setting up…"
       : phase === "countdown"
       ? "Get ready"
+      : phase === "wrapping"
+      ? "Wrapping up…"
       : isConnected
       ? "Live"
       : isRecording
@@ -56,7 +72,7 @@ export function Recorder() {
       : "Ready"
 
   const statusDotClass =
-    phase === "preparing" || phase === "countdown"
+    phase === "preparing" || phase === "countdown" || phase === "wrapping"
       ? "bg-amber-400 animate-pulse"
       : isConnected
       ? "bg-green-400 animate-pulse"
@@ -65,28 +81,92 @@ export function Recorder() {
       : "bg-gray-600"
 
   const buttonLabel =
-    phase === "recording" ? "End Session" : phase === "countdown" ? "Cancel" : "Start Session"
+    phase === "recording"
+      ? "End Session"
+      : phase === "countdown"
+      ? "Cancel"
+      : phase === "wrapping"
+      ? "Wrapping up…"
+      : "Start Session"
 
-  const onButtonClick = phase === "idle" ? startSession : stopSession
-  const buttonDisabled = phase === "preparing"
+  const onButtonClick =
+    phase === "idle" ? () => startSession({ durationSec, prompt, withCamera }) : stopSession
+  const buttonDisabled = phase === "preparing" || phase === "wrapping"
+
+  const showTimer = phase === "recording" && remainingMs !== null
+  const timerTone =
+    remainingMs !== null && remainingMs <= 10_000
+      ? "bg-red-500/30 border-red-400/60 text-red-100 animate-pulse"
+      : remainingMs !== null && remainingMs <= 30_000
+      ? "bg-amber-500/30 border-amber-400/50 text-amber-100 animate-pulse"
+      : "bg-black/40 border-white/10 text-white/80"
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {/* Video preview */}
+      {/* Prompt card */}
+      {prompt && (
+        <div className="w-full max-w-2xl bg-indigo-500/10 border border-indigo-400/20 rounded-xl px-5 py-4">
+          <p className="text-xs uppercase tracking-widest text-indigo-300/70 mb-1.5">Prompt</p>
+          <p className="text-indigo-100 text-base italic leading-relaxed">{prompt}</p>
+        </div>
+      )}
+
+      {/* Media surface: video preview or audio-only visual */}
       <div className="relative w-full max-w-2xl aspect-video bg-gray-900 rounded-2xl overflow-hidden ring-1 ring-white/5">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="w-full h-full object-cover scale-x-[-1]"
-        />
+        {withCamera ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full h-full object-cover scale-x-[-1]"
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-950 to-black">
+            <div className="relative">
+              {isRecording && (
+                <>
+                  <span className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping" />
+                  <span className="absolute -inset-4 rounded-full bg-indigo-500/10 animate-ping" style={{ animationDelay: "0.5s" }} />
+                </>
+              )}
+              <div className="relative w-24 h-24 rounded-full bg-indigo-500/20 ring-2 ring-indigo-400/40 flex items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="w-10 h-10 text-indigo-200"
+                >
+                  <rect x="9" y="3" width="6" height="12" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </div>
+            </div>
+            <p className="mt-6 text-sm text-gray-400 tracking-wide uppercase">Audio only</p>
+          </div>
+        )}
 
         {/* Status indicator */}
         <div className="absolute top-4 left-4 flex items-center gap-2">
           <div className={`w-2.5 h-2.5 rounded-full transition-colors ${statusDotClass}`} />
           <span className="text-xs text-white/60 font-medium">{statusText}</span>
         </div>
+
+        {/* Timer */}
+        {showTimer && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2">
+            <div
+              className={`px-3 py-1 rounded-full text-sm font-semibold tabular-nums backdrop-blur-sm border transition-colors ${timerTone}`}
+            >
+              {formatRemaining(remainingMs ?? 0)}
+            </div>
+          </div>
+        )}
 
         {/* Live metrics */}
         {isRecording && latestAnalysis && (
@@ -136,6 +216,34 @@ export function Recorder() {
                   {countdown}
                 </motion.div>
               </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Wrap-up overlay */}
+        <AnimatePresence>
+          {phase === "wrapping" && (
+            <motion.div
+              key="wrap-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 backdrop-blur-sm"
+            >
+              <span className="text-white/70 text-sm font-medium mb-3 tracking-wide uppercase">
+                Wrapping up
+              </span>
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <motion.span
+                    key={i}
+                    className="w-2.5 h-2.5 rounded-full bg-amber-300"
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                  />
+                ))}
+              </div>
+              <p className="text-white/50 text-xs mt-4">Capturing your final words…</p>
             </motion.div>
           )}
         </AnimatePresence>

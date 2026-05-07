@@ -65,7 +65,11 @@ export class GlissWebSocket {
     }
   }
 
-  sendConfig(config: { ai_enabled: boolean }): void {
+  sendConfig(config: {
+    ai_enabled?: boolean
+    prompt?: string | null
+    target_duration_seconds?: number | null
+  }): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "config", ...config }))
     }
@@ -74,6 +78,12 @@ export class GlissWebSocket {
   sendMetrics(metrics: Omit<FaceMetrics, "type">): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "metrics", ...metrics }))
+    }
+  }
+
+  sendControl(action: "stop"): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "control", action }))
     }
   }
 

@@ -10,7 +10,11 @@
       "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/api/models/Systran/faster-whisper-small\" -UseBasicParsing -TimeoutSec 15; Write-Output \"HTTP $\\($r.StatusCode\\) - body length $\\($r.Content.Length\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })",
       "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $r = Invoke-WebRequest -Uri \"https://huggingface.co/api/models/Systran/faster-whisper-small\" -UseBasicParsing; $j = $r.Content | ConvertFrom-Json; $j.sha; \"---\"; $j.siblings | ForEach-Object { $_.rfilename })",
       "PowerShell(Get-ChildItem *)",
-      "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/Systran/faster-whisper-small/resolve/main/config.json\" -UseBasicParsing -TimeoutSec 30; Write-Output \"OK: $\\($r.StatusCode\\), $\\($r.Content.Length\\) bytes\"; Write-Output \"Final URL: $\\($r.BaseResponse.ResponseUri\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })"
+      "PowerShell([Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $r = Invoke-WebRequest -Uri \"https://huggingface.co/Systran/faster-whisper-small/resolve/main/config.json\" -UseBasicParsing -TimeoutSec 30; Write-Output \"OK: $\\($r.StatusCode\\), $\\($r.Content.Length\\) bytes\"; Write-Output \"Final URL: $\\($r.BaseResponse.ResponseUri\\)\" } catch { Write-Output \"FAILED: $\\($_.Exception.Message\\)\" })",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(npm run *)",
+      "PowerShell(npm *)"
     ]
   }
 }
