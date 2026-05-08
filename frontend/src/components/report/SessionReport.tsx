@@ -69,7 +69,7 @@ export function SessionReport({ report }: Props) {
             )}
           </div>
           <Link
-            href="/"
+            href="/practice"
             className="px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-sm font-medium transition-colors shrink-0"
           >
             Practice again

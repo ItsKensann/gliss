@@ -19,7 +19,12 @@
       "Bash(npx tsc *)",
       "Bash(npx next *)",
       "Bash(npx eslint *)",
-      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from app.api.routes.session import session_websocket; from app.services.session_store import build_report; from app.models.session import AnalysisResult, SessionSummary, SessionReport; print\\('OK'\\)\")"
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from app.api.routes.session import session_websocket; from app.services.session_store import build_report; from app.models.session import AnalysisResult, SessionSummary, SessionReport; print\\('OK'\\)\")",
+      "PowerShell(npx --prefix frontend tsc --noEmit -p frontend 2>&1 | Select-Object -Last 30)",
+      "PowerShell($PWD.Path)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 30)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 20)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 10)"
     ]
   }
 }
