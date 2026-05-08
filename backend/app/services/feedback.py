@@ -14,17 +14,23 @@ async def get_ai_feedback(
     transcript: str,
     filler_count: int,
     avg_wpm: float,
-    eye_contact_score: float,
+    eye_contact_score: float | None,
 ) -> str:
     if not transcript.strip() or len(transcript.split()) < 20:
         return ""
+
+    eye_contact_line = (
+        f"- Eye contact: {eye_contact_score:.0%}\n"
+        if eye_contact_score is not None
+        else "- Eye contact: not available\n"
+    )
 
     prompt = (
         f'Transcript chunk: "{transcript}"\n\n'
         f"Metrics:\n"
         f"- Filler words: {filler_count}\n"
         f"- Pace: {avg_wpm:.0f} WPM\n"
-        f"- Eye contact: {eye_contact_score:.0%}\n\n"
+        f"{eye_contact_line}\n"
         "Give one short coaching note (1-2 sentences) on the most impactful thing to improve."
     )
 

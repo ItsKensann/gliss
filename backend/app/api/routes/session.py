@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
@@ -19,12 +19,43 @@ ANALYSIS_INTERVAL = 5.0
 _whisper_executor = ThreadPoolExecutor(max_workers=1)
 
 
+def _clamp_metric(value: object, default: float = 1.0) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _float_value(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _average_face_metrics(
+    samples: list[tuple[datetime, FaceMetrics]],
+    start_at: datetime,
+    end_at: datetime,
+) -> tuple[float | None, float | None]:
+    window = [metric for received_at, metric in samples if start_at <= received_at <= end_at]
+    if not window:
+        return None, None
+
+    eye_values = [m.eye_contact_score if m.face_visible else 0.0 for m in window]
+    head_values = [m.head_stability if m.face_visible else 0.0 for m in window]
+    return (
+        round(sum(eye_values) / len(eye_values), 3),
+        round(sum(head_values) / len(head_values), 3),
+    )
+
+
 async def _run_transcription_cycle(
     *,
     websocket: WebSocket,
     transcription: TranscriptionService,
     analysis: AudioAnalysisService,
-    face_metrics_ref: list[FaceMetrics],  # mutable 1-element list so callers can update it
+    face_metric_samples: list[tuple[datetime, FaceMetrics]],
     full_transcript: str,
     chunks: list[AnalysisResult],
     loop: asyncio.AbstractEventLoop,
@@ -42,6 +73,7 @@ async def _run_transcription_cycle(
         if min_seconds is None
         else lambda: transcription.transcribe_buffer(min_seconds=min_seconds)
     )
+    cycle_started_at = datetime.now(timezone.utc)
     result = await loop.run_in_executor(_whisper_executor, transcribe)
     if not result["text"].strip():
         return full_transcript
@@ -55,23 +87,31 @@ async def _run_transcription_cycle(
     ai_fb: str = ""
     coherence: float | None = None
 
+    audio_duration = float(result.get("audio_duration") or 0.0)
+    anchor = anchor_ref[0] or cycle_started_at
+    end_offset = (cycle_started_at - anchor).total_seconds()
+    start_offset = max(0.0, end_offset - audio_duration)
+    chunk_started_at = anchor + timedelta(seconds=start_offset)
+    chunk_ended_at = anchor + timedelta(seconds=end_offset)
+    eye_snapshot, head_snapshot = _average_face_metrics(
+        face_metric_samples,
+        chunk_started_at,
+        chunk_ended_at,
+    )
+
     if with_ai:
         try:
             ai_fb, coherence = await asyncio.gather(
                 get_ai_feedback(
                     chunk_text, len(fillers), speed.current_wpm,
-                    face_metrics_ref[0].eye_contact_score,
+                    eye_snapshot,
                 ),
                 get_coherence_score(full_transcript[-500:]),
             )
         except Exception as e:
             logger.warning("AI feedback error (skipping for this chunk): %s", e)
 
-    audio_duration = float(result.get("audio_duration") or 0.0)
-    anchor = anchor_ref[0] or datetime.now(timezone.utc)
-    end_offset = (datetime.now(timezone.utc) - anchor).total_seconds()
-    start_offset = max(0.0, end_offset - audio_duration)
-
+    # Store the average face metrics for the same window as this transcript chunk.
     output = AnalysisResult(
         transcript=chunk_text,
         filler_words=fillers,
@@ -83,6 +123,8 @@ async def _run_transcription_cycle(
         ai_feedback=ai_fb,
         start_offset_seconds=round(start_offset, 2),
         end_offset_seconds=round(end_offset, 2),
+        avg_eye_contact=eye_snapshot,
+        avg_head_stability=head_snapshot,
     )
     chunks.append(output)
 
@@ -104,8 +146,7 @@ async def session_websocket(
 
     transcription = TranscriptionService()
     analysis = AudioAnalysisService()
-    # Wrap in a list so the nested async function can mutate it without nonlocal
-    face_metrics_ref = [FaceMetrics(eye_contact_score=1.0, head_stability=1.0, timestamp=0)]
+    face_metric_samples: list[tuple[datetime, FaceMetrics]] = []
     ai_enabled_ref = [False]  # off by default during dev — client must opt in via "config" message
     prompt_ref: list[str | None] = [None]
     target_duration_ref: list[float | None] = [None]
@@ -137,7 +178,7 @@ async def session_websocket(
             websocket=websocket,
             transcription=transcription,
             analysis=analysis,
-            face_metrics_ref=face_metrics_ref,
+            face_metric_samples=face_metric_samples,
             full_transcript=full_transcript,
             chunks=chunks,
             loop=loop,
@@ -156,7 +197,7 @@ async def session_websocket(
                 websocket=websocket,
                 transcription=transcription,
                 analysis=analysis,
-                face_metrics_ref=face_metrics_ref,
+                face_metric_samples=face_metric_samples,
                 full_transcript=full_transcript,
                 chunks=chunks,
                 loop=loop,
@@ -179,11 +220,14 @@ async def session_websocket(
                 try:
                     msg = json.loads(data["text"])
                     if msg.get("type") == "metrics":
-                        face_metrics_ref[0] = FaceMetrics(
-                            eye_contact_score=msg.get("eye_contact_score", 1.0),
-                            head_stability=msg.get("head_stability", 1.0),
-                            timestamp=msg.get("timestamp", 0),
+                        received_at = datetime.now(timezone.utc)
+                        face_metrics = FaceMetrics(
+                            eye_contact_score=_clamp_metric(msg.get("eye_contact_score"), 1.0),
+                            head_stability=_clamp_metric(msg.get("head_stability"), 1.0),
+                            face_visible=bool(msg.get("face_visible", True)),
+                            timestamp=_float_value(msg.get("timestamp"), 0.0),
                         )
+                        face_metric_samples.append((received_at, face_metrics))
                     elif msg.get("type") == "config":
                         if "ai_enabled" in msg:
                             ai_enabled_ref[0] = bool(msg["ai_enabled"])
@@ -251,7 +295,7 @@ async def session_websocket(
                 websocket=websocket,
                 transcription=transcription,
                 analysis=analysis,
-                face_metrics_ref=face_metrics_ref,
+                face_metric_samples=face_metric_samples,
                 full_transcript=full_transcript,
                 chunks=chunks,
                 loop=loop,

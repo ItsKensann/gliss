@@ -216,10 +216,11 @@ export function useSession() {
   }, [])
 
   const sendFaceMetrics = useCallback(
-    (eyeContactScore: number, headStability: number) => {
+    (eyeContactScore: number, headStability: number, faceVisible: boolean) => {
       wsRef.current?.sendMetrics({
         eye_contact_score: eyeContactScore,
         head_stability: headStability,
+        face_visible: faceVisible,
         timestamp: Date.now(),
       })
     },

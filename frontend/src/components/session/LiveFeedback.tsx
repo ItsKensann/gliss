@@ -6,7 +6,7 @@ import { AnalysisResult, ImmediateFeedback } from "@/lib/types"
 interface Props {
   analysis: AnalysisResult | null
   eyeContactScore: number
-  headStability: number
+  faceVisible?: boolean
 }
 
 const severityStyles: Record<ImmediateFeedback["severity"], string> = {
@@ -15,15 +15,14 @@ const severityStyles: Record<ImmediateFeedback["severity"], string> = {
   critical: "bg-red-500/20 border-red-400/40 text-red-200",
 }
 
-export function LiveFeedback({ analysis, eyeContactScore, headStability }: Props) {
-  const postureFeedback: ImmediateFeedback[] = [
-    ...(eyeContactScore < 0.5
-      ? [{ message: "Try to maintain eye contact", type: "posture" as const, severity: "warning" as const }]
-      : []),
-    ...(headStability < 0.4
-      ? [{ message: "Keep your head steadier while speaking", type: "posture" as const, severity: "info" as const }]
-      : []),
-  ]
+export function LiveFeedback({ analysis, eyeContactScore, faceVisible = true }: Props) {
+  const postureFeedback: ImmediateFeedback[] = faceVisible
+    ? [
+        ...(eyeContactScore < 0.5
+          ? [{ message: "Try to maintain eye contact", type: "posture" as const, severity: "warning" as const }]
+          : []),
+      ]
+    : []
 
   const allFeedback = [...(analysis?.immediate_feedback ?? []), ...postureFeedback].slice(0, 3)
 

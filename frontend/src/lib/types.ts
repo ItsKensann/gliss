@@ -40,12 +40,15 @@ export interface AnalysisResult {
   ai_feedback?: string
   start_offset_seconds?: number
   end_offset_seconds?: number
+  avg_eye_contact?: number | null
+  avg_head_stability?: number | null
 }
 
 export interface FaceMetrics {
   type: "metrics"
   eye_contact_score: number
   head_stability: number
+  face_visible: boolean
   timestamp: number
 }
 
@@ -65,6 +68,8 @@ export interface SessionSummary {
   total_pauses: number
   avg_coherence: number
   coach_notes: string[]
+  avg_eye_contact?: number | null
+  avg_head_stability?: number | null
 }
 
 export interface SessionListItem {
