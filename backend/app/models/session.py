@@ -24,6 +24,7 @@ class SpeedAnalysis(BaseModel):
 class FaceMetrics(BaseModel):
     eye_contact_score: float
     head_stability: float
+    face_visible: bool = True
     timestamp: float
 
 

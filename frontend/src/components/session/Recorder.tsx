@@ -268,8 +268,7 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
         <LiveFeedback
           analysis={latestAnalysis}
           eyeContactScore={eyeContactScore}
-          headStability={headStability}
-          faceVisible={faceVisible}
+          faceVisible={withCamera && isRecording ? faceVisible : true}
         />
       </div>
 

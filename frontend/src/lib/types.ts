@@ -48,6 +48,7 @@ export interface FaceMetrics {
   type: "metrics"
   eye_contact_score: number
   head_stability: number
+  face_visible: boolean
   timestamp: number
 }
 

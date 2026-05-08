@@ -25,8 +25,10 @@ def build_report(
     filler_counts: dict[str, int] = defaultdict(int)
     wpm_values: list[float] = []
     coherence_values: list[float] = []
-    eye_values: list[float] = []
-    head_values: list[float] = []
+    eye_total = 0.0
+    eye_weight = 0.0
+    head_total = 0.0
+    head_weight = 0.0
     coach_notes: list[str] = []
     total_pauses = 0
 
@@ -37,10 +39,14 @@ def build_report(
         total_pauses += len(chunk.pauses)
         if chunk.coherence_score is not None:
             coherence_values.append(chunk.coherence_score)
+        chunk_duration = max(0.0, chunk.end_offset_seconds - chunk.start_offset_seconds)
+        metric_weight = chunk_duration or 1.0
         if chunk.avg_eye_contact is not None:
-            eye_values.append(chunk.avg_eye_contact)
+            eye_total += chunk.avg_eye_contact * metric_weight
+            eye_weight += metric_weight
         if chunk.avg_head_stability is not None:
-            head_values.append(chunk.avg_head_stability)
+            head_total += chunk.avg_head_stability * metric_weight
+            head_weight += metric_weight
         if chunk.ai_feedback and chunk.ai_feedback not in coach_notes:
             coach_notes.append(chunk.ai_feedback)
 
@@ -55,8 +61,8 @@ def build_report(
         total_pauses=total_pauses,
         avg_coherence=round(sum(coherence_values) / len(coherence_values), 2) if coherence_values else 1.0,
         coach_notes=coach_notes[:5],  # top 5 unique notes
-        avg_eye_contact=round(sum(eye_values) / len(eye_values), 3) if eye_values else None,
-        avg_head_stability=round(sum(head_values) / len(head_values), 3) if head_values else None,
+        avg_eye_contact=round(eye_total / eye_weight, 3) if eye_weight else None,
+        avg_head_stability=round(head_total / head_weight, 3) if head_weight else None,
     )
 
     return SessionReport(
