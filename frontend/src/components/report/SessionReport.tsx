@@ -85,7 +85,7 @@ export function SessionReport({ report }: Props) {
         )}
 
         {/* Stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <StatCard
             label="Duration"
             value={formatDuration(report.duration_seconds)}
@@ -105,6 +105,21 @@ export function SessionReport({ report }: Props) {
             label="Coherence"
             value={`${Math.round(summary.avg_coherence * 100)}%`}
             sub={summary.avg_coherence >= 0.75 ? "Good focus" : "Needs work"}
+          />
+          <StatCard
+            label="Eye contact"
+            value={
+              summary.avg_eye_contact != null
+                ? `${Math.round(summary.avg_eye_contact * 100)}%`
+                : "—"
+            }
+            sub={
+              summary.avg_eye_contact == null
+                ? "No camera data"
+                : summary.avg_eye_contact >= 0.7
+                ? "Strong"
+                : "Practice"
+            }
           />
         </div>
 

@@ -25,6 +25,8 @@ def build_report(
     filler_counts: dict[str, int] = defaultdict(int)
     wpm_values: list[float] = []
     coherence_values: list[float] = []
+    eye_values: list[float] = []
+    head_values: list[float] = []
     coach_notes: list[str] = []
     total_pauses = 0
 
@@ -35,6 +37,10 @@ def build_report(
         total_pauses += len(chunk.pauses)
         if chunk.coherence_score is not None:
             coherence_values.append(chunk.coherence_score)
+        if chunk.avg_eye_contact is not None:
+            eye_values.append(chunk.avg_eye_contact)
+        if chunk.avg_head_stability is not None:
+            head_values.append(chunk.avg_head_stability)
         if chunk.ai_feedback and chunk.ai_feedback not in coach_notes:
             coach_notes.append(chunk.ai_feedback)
 
@@ -49,6 +55,8 @@ def build_report(
         total_pauses=total_pauses,
         avg_coherence=round(sum(coherence_values) / len(coherence_values), 2) if coherence_values else 1.0,
         coach_notes=coach_notes[:5],  # top 5 unique notes
+        avg_eye_contact=round(sum(eye_values) / len(eye_values), 3) if eye_values else None,
+        avg_head_stability=round(sum(head_values) / len(head_values), 3) if head_values else None,
     )
 
     return SessionReport(

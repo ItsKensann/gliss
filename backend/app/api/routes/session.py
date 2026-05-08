@@ -19,12 +19,16 @@ ANALYSIS_INTERVAL = 5.0
 _whisper_executor = ThreadPoolExecutor(max_workers=1)
 
 
+FACE_METRICS_FRESHNESS_S = 10.0  # snapshots older than this are treated as no-data
+
+
 async def _run_transcription_cycle(
     *,
     websocket: WebSocket,
     transcription: TranscriptionService,
     analysis: AudioAnalysisService,
     face_metrics_ref: list[FaceMetrics],  # mutable 1-element list so callers can update it
+    last_face_metrics_at_ref: list,  # [datetime | None] — when face_metrics_ref was last updated
     full_transcript: str,
     chunks: list[AnalysisResult],
     loop: asyncio.AbstractEventLoop,
@@ -72,6 +76,18 @@ async def _run_transcription_cycle(
     end_offset = (datetime.now(timezone.utc) - anchor).total_seconds()
     start_offset = max(0.0, end_offset - audio_duration)
 
+    # Snapshot the latest face metric, but only if it's actually fresh —
+    # the frontend stops sending while no face is visible, so a stale
+    # snapshot from minutes ago shouldn't pollute the chunk.
+    eye_snapshot: float | None = None
+    head_snapshot: float | None = None
+    last_at = last_face_metrics_at_ref[0]
+    if last_at is not None:
+        age = (datetime.now(timezone.utc) - last_at).total_seconds()
+        if age <= FACE_METRICS_FRESHNESS_S:
+            eye_snapshot = round(face_metrics_ref[0].eye_contact_score, 3)
+            head_snapshot = round(face_metrics_ref[0].head_stability, 3)
+
     output = AnalysisResult(
         transcript=chunk_text,
         filler_words=fillers,
@@ -83,6 +99,8 @@ async def _run_transcription_cycle(
         ai_feedback=ai_fb,
         start_offset_seconds=round(start_offset, 2),
         end_offset_seconds=round(end_offset, 2),
+        avg_eye_contact=eye_snapshot,
+        avg_head_stability=head_snapshot,
     )
     chunks.append(output)
 
@@ -106,6 +124,10 @@ async def session_websocket(
     analysis = AudioAnalysisService()
     # Wrap in a list so the nested async function can mutate it without nonlocal
     face_metrics_ref = [FaceMetrics(eye_contact_score=1.0, head_stability=1.0, timestamp=0)]
+    # When the latest face metric was received. None until the first one arrives;
+    # _run_transcription_cycle uses this to decide whether the snapshot is fresh
+    # enough to attach to the chunk (vs. leaving the field null = no data).
+    last_face_metrics_at_ref: list[datetime | None] = [None]
     ai_enabled_ref = [False]  # off by default during dev — client must opt in via "config" message
     prompt_ref: list[str | None] = [None]
     target_duration_ref: list[float | None] = [None]
@@ -138,6 +160,7 @@ async def session_websocket(
             transcription=transcription,
             analysis=analysis,
             face_metrics_ref=face_metrics_ref,
+            last_face_metrics_at_ref=last_face_metrics_at_ref,
             full_transcript=full_transcript,
             chunks=chunks,
             loop=loop,
@@ -184,6 +207,7 @@ async def session_websocket(
                             head_stability=msg.get("head_stability", 1.0),
                             timestamp=msg.get("timestamp", 0),
                         )
+                        last_face_metrics_at_ref[0] = datetime.now(timezone.utc)
                     elif msg.get("type") == "config":
                         if "ai_enabled" in msg:
                             ai_enabled_ref[0] = bool(msg["ai_enabled"])
@@ -252,6 +276,7 @@ async def session_websocket(
                 transcription=transcription,
                 analysis=analysis,
                 face_metrics_ref=face_metrics_ref,
+                last_face_metrics_at_ref=last_face_metrics_at_ref,
                 full_transcript=full_transcript,
                 chunks=chunks,
                 loop=loop,

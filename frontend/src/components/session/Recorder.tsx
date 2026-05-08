@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useSession } from "@/hooks/useSession"
+import { useFaceTracking } from "@/hooks/useFaceTracking"
 import { LiveFeedback } from "./LiveFeedback"
 
 function MetricPill({ label, value, highlight }: { label: string; value: string; highlight: boolean }) {
@@ -34,8 +35,6 @@ interface RecorderProps {
 
 export function Recorder({ durationSec = null, prompt, withCamera = true }: RecorderProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [eyeContactScore] = useState(1.0)
-  const [headStability] = useState(1.0)
 
   const {
     isRecording,
@@ -50,7 +49,14 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
     startSession,
     stopSession,
     toggleAI,
+    sendFaceMetrics,
   } = useSession()
+
+  const { eyeContactScore, headStability, faceVisible } = useFaceTracking(
+    videoRef,
+    isRecording && withCamera,
+    sendFaceMetrics,
+  )
 
   useEffect(() => {
     if (withCamera && streamRef.current && videoRef.current) {
@@ -169,23 +175,34 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
         )}
 
         {/* Live metrics */}
-        {isRecording && latestAnalysis && (
-          <div className="absolute top-4 right-4 flex gap-2">
-            <MetricPill
-              label="WPM"
-              value={latestAnalysis.speed.current_wpm.toFixed(0)}
-              highlight={latestAnalysis.speed.is_spike}
-            />
-            <MetricPill
-              label="Fillers"
-              value={String(latestAnalysis.filler_words.length)}
-              highlight={latestAnalysis.filler_words.length > 3}
-            />
-            {latestAnalysis.coherence_score !== undefined && (
+        {isRecording && (
+          <div className="absolute top-4 right-4 flex gap-2 flex-wrap justify-end">
+            {latestAnalysis && (
+              <>
+                <MetricPill
+                  label="WPM"
+                  value={latestAnalysis.speed.current_wpm.toFixed(0)}
+                  highlight={latestAnalysis.speed.is_spike}
+                />
+                <MetricPill
+                  label="Fillers"
+                  value={String(latestAnalysis.filler_words.length)}
+                  highlight={latestAnalysis.filler_words.length > 3}
+                />
+                {latestAnalysis.coherence_score !== undefined && (
+                  <MetricPill
+                    label="Focus"
+                    value={`${Math.round(latestAnalysis.coherence_score * 100)}%`}
+                    highlight={latestAnalysis.coherence_score < 0.5}
+                  />
+                )}
+              </>
+            )}
+            {withCamera && (
               <MetricPill
-                label="Focus"
-                value={`${Math.round(latestAnalysis.coherence_score * 100)}%`}
-                highlight={latestAnalysis.coherence_score < 0.5}
+                label="Eye"
+                value={faceVisible ? `${Math.round(eyeContactScore * 100)}%` : "—"}
+                highlight={faceVisible && eyeContactScore < 0.5}
               />
             )}
           </div>
@@ -252,6 +269,7 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
           analysis={latestAnalysis}
           eyeContactScore={eyeContactScore}
           headStability={headStability}
+          faceVisible={faceVisible}
         />
       </div>
 

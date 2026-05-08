@@ -50,6 +50,11 @@ class AnalysisResult(BaseModel):
     ai_feedback: Optional[str] = None
     start_offset_seconds: float = 0.0
     end_offset_seconds: float = 0.0
+    # Snapshot of the latest face metrics at the time this chunk was built.
+    # None when no face was visible (or camera was off) — distinguishes
+    # "absent data" from "zero score" so the report can ignore it.
+    avg_eye_contact: Optional[float] = None
+    avg_head_stability: Optional[float] = None
 
 
 class SessionSummary(BaseModel):
@@ -60,6 +65,8 @@ class SessionSummary(BaseModel):
     total_pauses: int
     avg_coherence: float
     coach_notes: list[str]              # ai_feedback messages, deduplicated
+    avg_eye_contact: Optional[float] = None
+    avg_head_stability: Optional[float] = None
 
 
 class SessionListItem(BaseModel):

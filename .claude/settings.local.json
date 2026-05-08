@@ -14,7 +14,12 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\" -Directory)",
       "Bash(Select-Object Name)",
       "PowerShell(npm run *)",
-      "PowerShell(npm *)"
+      "PowerShell(npm *)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(npx eslint *)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -c \"from app.api.routes.session import session_websocket; from app.services.session_store import build_report; from app.models.session import AnalysisResult, SessionSummary, SessionReport; print\\('OK'\\)\")"
     ]
   }
 }
