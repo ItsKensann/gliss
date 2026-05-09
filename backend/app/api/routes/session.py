@@ -3,10 +3,11 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app.models.session import AnalysisResult, FaceMetrics, Pause
+from app.models.session import AnalysisResult, FaceMetrics, Pause, SessionReport
 from app.services.audio_analysis import AudioAnalysisService, localize_fillers, localize_pauses
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
@@ -32,6 +33,18 @@ def _float_value(value: object, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _report_debug_stats(report: SessionReport) -> dict:
+    return {
+        "chunks": len(report.chunks),
+        "words": report.summary.total_words,
+        "filler_counts": report.summary.filler_counts,
+        "total_fillers": sum(report.summary.filler_counts.values()),
+        "total_pauses": report.summary.total_pauses,
+        "avg_wpm": report.summary.avg_wpm,
+        "peak_wpm": report.summary.peak_wpm,
+    }
 
 
 def _average_face_metrics(
@@ -378,13 +391,20 @@ async def session_websocket(
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
+        finalization_started = perf_counter()
         # Signal the analysis loop and wait for it to finish its current work.
         # This avoids cancelling an in-flight Whisper call.
         stop_event.set()
+        analysis_wait_started = perf_counter()
         try:
             await asyncio.wait_for(analysis_task, timeout=30.0)
         except (asyncio.TimeoutError, Exception):
             analysis_task.cancel()
+        logger.info(
+            "Session %s analysis task shutdown wait complete in %.1fms",
+            session_id,
+            (perf_counter() - analysis_wait_started) * 1000,
+        )
 
         # Report timestamps describe the *recording window* — not the WS lifetime.
         # started_at: first audio frame received (falls back to WS accept time
@@ -395,6 +415,7 @@ async def session_websocket(
         report_ended_at = recording_end_at_ref[0] or datetime.now(timezone.utc)
 
         def _save(is_finalized: bool) -> None:
+            save_started = perf_counter()
             report = build_report(
                 session_id,
                 report_started_at,
@@ -406,6 +427,13 @@ async def session_websocket(
                 is_finalized=is_finalized,
             )
             save_report(report)
+            logger.info(
+                "Session %s report save complete: finalized=%s save_ms=%.1f stats=%s",
+                session_id,
+                is_finalized,
+                (perf_counter() - save_started) * 1000,
+                _report_debug_stats(report),
+            )
 
         # Save what we have NOW so the frontend stops polling 404s and can render
         # immediately. The final transcription cycle below picks up trailing
@@ -419,6 +447,9 @@ async def session_websocket(
         )
 
         try:
+            final_buffer_started = perf_counter()
+            buffer_words_before = len(full_transcript.split())
+            buffer_chunks_before = len(chunks)
             full_transcript = await _run_transcription_cycle(
                 websocket=websocket,
                 transcription=transcription,
@@ -431,20 +462,40 @@ async def session_websocket(
                 anchor_ref=first_audio_at_ref,
                 min_seconds=1.0,
             )
+            logger.info(
+                "Session %s final live-buffer transcription complete: elapsed_ms=%.1f chunks=%d->%d words=%d->%d",
+                session_id,
+                (perf_counter() - final_buffer_started) * 1000,
+                buffer_chunks_before,
+                len(chunks),
+                buffer_words_before,
+                len(full_transcript.split()),
+            )
         except Exception:
             logger.exception("Final transcription cycle failed; saving as-is")
 
         try:
+            full_pass_started = perf_counter()
             final_result = await loop.run_in_executor(
                 _whisper_executor,
                 transcription.transcribe_full_session,
             )
+            logger.info(
+                "Session %s full-session Whisper pass complete: elapsed_ms=%.1f audio_duration=%.2fs words=%d segments=%d",
+                session_id,
+                (perf_counter() - full_pass_started) * 1000,
+                float(final_result.get("audio_duration") or 0.0),
+                len(final_result.get("text", "").split()),
+                len(final_result.get("segments", [])),
+            )
             final_text = final_result["text"].strip()
             if final_text:
+                pause_started = perf_counter()
                 audio_pauses = transcription.detect_full_session_pauses()
                 logger.info(
-                    "Session %s audio pause detection found %d pauses",
+                    "Session %s audio pause detection complete: elapsed_ms=%.1f pauses=%d",
                     session_id,
+                    (perf_counter() - pause_started) * 1000,
                     len(audio_pauses),
                 )
                 logger.debug(
@@ -458,11 +509,19 @@ async def session_websocket(
                     for chunk in chunks
                     if chunk.coherence_score is not None
                 ]
+                rebuild_started = perf_counter()
                 final_chunks = _build_final_report_chunks(
                     final_result,
                     face_metric_samples,
                     report_started_at,
                     audio_pauses,
+                )
+                logger.info(
+                    "Session %s final report chunk rebuild complete: elapsed_ms=%.1f chunks=%d fillers=%d",
+                    session_id,
+                    (perf_counter() - rebuild_started) * 1000,
+                    len(final_chunks),
+                    sum(len(chunk.filler_words) for chunk in final_chunks),
                 )
                 for final_chunk, note in zip(final_chunks, live_ai_feedback):
                     final_chunk.ai_feedback = note
@@ -483,4 +542,9 @@ async def session_websocket(
             "Session %s finalized — %d chunks, %.0fs",
             session_id, len(chunks),
             (report_ended_at - report_started_at).total_seconds(),
+        )
+        logger.info(
+            "Session %s finalization timing complete: elapsed_ms=%.1f",
+            session_id,
+            (perf_counter() - finalization_started) * 1000,
         )

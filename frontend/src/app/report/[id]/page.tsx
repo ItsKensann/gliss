@@ -8,6 +8,20 @@ import type { SessionReportData } from "@/lib/types"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
+function reportDebugStats(report: SessionReportData) {
+  const fillerCounts = report.summary.filler_counts
+  return {
+    is_finalized: report.is_finalized ?? true,
+    chunks: report.chunks.length,
+    words: report.summary.total_words,
+    filler_counts: fillerCounts,
+    total_fillers: Object.values(fillerCounts).reduce((sum, count) => sum + count, 0),
+    total_pauses: report.summary.total_pauses,
+    avg_wpm: report.summary.avg_wpm,
+    peak_wpm: report.summary.peak_wpm,
+  }
+}
+
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>()
   const [report, setReport] = useState<SessionReportData | null>(null)
@@ -18,8 +32,20 @@ export default function ReportPage() {
     if (!id) return
 
     const load = async () => {
+      const requestedAt = performance.now()
+      console.debug("[Gliss report] fetch start", {
+        session_id: id,
+        attempt: attempts,
+        timestamp: new Date().toISOString(),
+      })
       try {
         const res = await fetch(`${API}/api/v1/report/${id}`)
+        console.debug("[Gliss report] fetch response", {
+          session_id: id,
+          attempt: attempts,
+          status: res.status,
+          elapsed_ms: Math.round(performance.now() - requestedAt),
+        })
         if (res.status === 404 && attempts < 60) {
           // Backend may still be finishing Whisper + saving — retry for up to 30s.
           // Tight 500ms interval so the report renders within ~half a second of
@@ -27,17 +53,37 @@ export default function ReportPage() {
           setTimeout(() => setAttempts((n) => n + 1), 500)
           return
         }
-        if (!res.ok) { setError(true); return }
-        const data: SessionReportData = await res.json()
-        setReport(data)
-        // Backend writes a preliminary report (is_finalized=false) so the user
-        // sees results immediately, then re-saves once the final transcription
-        // cycle picks up trailing audio. Keep polling until the finalized
-        // version lands so trailing words appear without a manual refresh.
-        if (data.is_finalized === false && attempts < 60) {
-          setTimeout(() => setAttempts((n) => n + 1), 1500)
+        if (!res.ok) {
+          console.debug("[Gliss report] fetch failed", {
+            session_id: id,
+            attempt: attempts,
+            status: res.status,
+          })
+          setError(true)
+          return
         }
-      } catch {
+        const data: SessionReportData = await res.json()
+        console.debug("[Gliss report] payload", {
+          session_id: id,
+          attempt: attempts,
+          elapsed_ms: Math.round(performance.now() - requestedAt),
+          stats: reportDebugStats(data),
+        })
+        if (data.is_finalized === false) {
+          console.debug("[Gliss report] waiting for finalized report", {
+            session_id: id,
+            attempt: attempts,
+          })
+          setTimeout(() => setAttempts((n) => n + 1), 1500)
+          return
+        }
+        setReport(data)
+      } catch (error) {
+        console.debug("[Gliss report] fetch error", {
+          session_id: id,
+          attempt: attempts,
+          error,
+        })
         setError(true)
       }
     }
