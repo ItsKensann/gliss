@@ -1,6 +1,6 @@
 # Gliss
 
-Real-time AI speech coaching app. Browser captures camera + mic, streams raw PCM audio over WebSocket to a Python backend that runs faster-whisper for transcription, local heuristics for filler/pace/pause detection, and Codex for live coaching notes. Sessions are saved as JSON and rendered as post-session reports.
+Real-time AI speech coaching app. Browser captures camera + mic, streams raw PCM audio over WebSocket to a Python backend that stores full-session PCM, runs periodic faster-whisper chunk transcription for immediate feedback, applies local heuristics for filler/pace/pause detection, and uses Codex for live coaching notes. Sessions are saved as JSON and rendered as post-session reports.
 
 ---
 
@@ -35,7 +35,7 @@ backend/
 │   ├── core/config.py                pydantic-settings (.env loader)
 │   ├── models/session.py             All Pydantic models (FillerWord, AnalysisResult, SessionReport, …)
 │   ├── services/
-│   │   ├── transcription.py          PCM buffer + faster-whisper wrapper
+│   │   ├── transcription.py          locked live PCM buffer + full-session PCM buffer + faster-whisper wrapper
 │   │   ├── audio_analysis.py         Filler/WPM/pause heuristics + immediate feedback
 │   │   ├── feedback.py               Codex API calls (AsyncAnthropic)
 │   │   └── session_store.py          build_report + save/load JSON files
@@ -70,15 +70,19 @@ frontend/
 
 ### Async + threading
 - Anthropic calls use `AsyncAnthropic` — never blocks the event loop.
-- Whisper is CPU-bound; always run via `loop.run_in_executor(_whisper_executor, …)`.
+- Whisper is CPU-bound; run it only via `loop.run_in_executor(_whisper_executor, …)`, including final full-session passes.
+- `TranscriptionService` guards mutable live and full-session PCM buffers with a `threading.Lock`.
+- Live chunk transcription is provisional and exists for immediate feedback only.
+- Final report generation runs a full-session Whisper pass after disconnect and uses those results as the source of truth for transcript, chunks, and speech metrics.
 - The analysis loop uses a **stop event**, not `task.cancel()`, so an in-flight Whisper run finishes cleanly before shutdown.
-- A final transcription cycle always runs in the `finally` block to capture audio buffered since the last interval (covers short sessions).
 
 ### Mutable state in nested async functions
 The session WebSocket handler uses 1-element list refs (`face_metrics_ref`, `ai_enabled_ref`) instead of `nonlocal` for state that the receive loop updates and `run_analysis` reads. This avoids Python's `nonlocal` quirks for mutable values across nested closures.
 
 ### WebSocket protocol
-- Audio: **binary** frames. First 4 bytes = uint32 LE source sample rate, remainder = float32 LE mono PCM. Backend resamples to 16kHz.
+- Audio: **binary** frames. First 4 bytes = uint32 LE source sample rate, remainder = float32 LE mono PCM chunks captured by the browser.
+- The AudioWorklet downmixes all input channels to mono before sending audio.
+- Backend resamples incoming audio to 16kHz and stores it in both the live chunk buffer and the full-session buffer.
 - Control: **JSON text** frames with a `type` discriminator: `"metrics"` (eye contact), `"config"` (`ai_enabled`).
 - Session ID is passed as a query string: `?session_id=<uuid>`.
 
@@ -122,7 +126,7 @@ cd frontend
 npm install                               # first-time only
 npm run dev                               # dev server on :3000
 npm run build                             # production build
-npm run lint                              # ESLint (next/core-web-vitals config)
+npm run lint                              # currently legacy `next lint`; update before relying on it with Next 16
 ```
 
 ### Full local stack
@@ -150,7 +154,9 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/api/v1/session
 
 - **Whisper is the bottleneck.** It runs on CPU. Don't await it on the main event loop.
 - **MediaRecorder is intentionally not used** — its WebM/Opus chunks aren't independently decodable. Keep the AudioWorklet PCM pipeline.
-- **Sessions can take 15–30s to save** after disconnect because of the final transcription. The report page retries the 404 for up to 40s.
+- **Reports are saved preliminarily** using live chunk results so the report route can return quickly after disconnect.
+- **Finalized reports replace provisional transcription data** with the full-session Whisper pass transcript, chunks, and derived metrics when available.
+- **Finalization can take extra time** because the full-session pass runs after disconnect. This is expected.
 - **Face tracking is stubbed** — `eye_contact_score` and `head_stability` are sent over the WS but always 1.0. MediaPipe wiring is the next big feature.
 
 ---
