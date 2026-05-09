@@ -1,3 +1,4 @@
+import string
 from collections import defaultdict
 from app.models.session import (
     BreathAdvice,
@@ -12,6 +13,8 @@ FILLER_WORDS = {
     "right", "okay", "er", "hmm", "well", "anyway", "you know",
     "sort of", "kind of", "i mean", "honestly", "clearly",
 }
+
+WORD_STRIP_CHARS = string.punctuation
 
 
 class AudioAnalysisService:
@@ -34,15 +37,21 @@ class AudioAnalysisService:
 
         return filler_words, speed, pauses, feedback
 
-    def _detect_fillers(self, segments: list) -> list[FillerWord]:
-        found: list[FillerWord] = []
+    def _collect_words(self, segments: list) -> list[dict]:
         words_data: list[dict] = []
-
         for seg in segments:
             words_data.extend(seg.get("words", []))
+        return words_data
+
+    def _normalize_word(self, word: str) -> str:
+        return word.strip().lower().strip(WORD_STRIP_CHARS)
+
+    def _detect_fillers(self, segments: list) -> list[FillerWord]:
+        found: list[FillerWord] = []
+        words_data = self._collect_words(segments)
 
         for i, w in enumerate(words_data):
-            word = w.get("word", "").strip().lower().lstrip(".,!?")
+            word = self._normalize_word(w.get("word", ""))
 
             if word in FILLER_WORDS:
                 self._session_filler_counts[word] += 1
@@ -53,7 +62,7 @@ class AudioAnalysisService:
                 ))
 
             if i < len(words_data) - 1:
-                next_word = words_data[i + 1].get("word", "").strip().lower()
+                next_word = self._normalize_word(words_data[i + 1].get("word", ""))
                 bigram = f"{word} {next_word}"
                 if bigram in FILLER_WORDS:
                     self._session_filler_counts[bigram] += 1
@@ -98,6 +107,21 @@ class AudioAnalysisService:
 
     def _detect_pauses(self, segments: list) -> list[Pause]:
         pauses: list[Pause] = []
+
+        words_data = self._collect_words(segments)
+        if len(words_data) >= 2:
+            for prev, current in zip(words_data, words_data[1:]):
+                gap_start = float(prev.get("end", 0.0) or 0.0)
+                gap_end = float(current.get("start", 0.0) or 0.0)
+                duration = gap_end - gap_start
+                if duration >= 0.8:
+                    pauses.append(Pause(
+                        start=round(gap_start, 2),
+                        end=round(gap_end, 2),
+                        duration=round(duration, 2),
+                    ))
+            return pauses
+
         for i in range(len(segments) - 1):
             gap_start = segments[i].get("end", 0)
             gap_end = segments[i + 1].get("start", 0)

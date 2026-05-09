@@ -25,6 +25,7 @@ export function useMediaStream() {
             channelCount: 1,
             echoCancellation: true,
             noiseSuppression: true,
+            autoGainControl: false,
           },
           video: withCamera ? { width: 640, height: 480, frameRate: 30 } : false,
         })

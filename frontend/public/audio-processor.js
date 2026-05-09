@@ -16,11 +16,19 @@ class PCMProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
-    const channel = inputs[0]?.[0]
-    if (!channel) return true
+    const input = inputs[0]
+    if (!input?.length) return true
 
-    this._chunks.push(channel.slice())
-    this._size += channel.length
+    const frames = input[0].length
+    const mono = new Float32Array(frames)
+    for (const channel of input) {
+      for (let i = 0; i < frames; i++) {
+        mono[i] += channel[i] / input.length
+      }
+    }
+
+    this._chunks.push(mono)
+    this._size += mono.length
 
     if (this._size >= this._targetSize) {
       const merged = new Float32Array(this._size)
