@@ -1,5 +1,6 @@
+import re
 import string
-from collections import defaultdict
+from collections import Counter, defaultdict
 from math import ceil
 
 import numpy as np
@@ -12,11 +13,37 @@ from app.models.session import (
     SpeedAnalysis,
 )
 
-FILLER_WORDS = {
-    "um", "uh", "like", "so", "basically", "literally", "actually",
-    "right", "okay", "er", "hmm", "well", "anyway", "you know",
-    "sort of", "kind of", "i mean", "honestly", "clearly",
+HESITATION_FILLERS = (
+    (re.compile(r"u+m+"), "um"),
+    (re.compile(r"u+h+"), "uh"),
+    (re.compile(r"e+r+"), "er"),
+    (re.compile(r"e+r+m+"), "erm"),
+    (re.compile(r"h+m+"), "hmm"),
+    (re.compile(r"m+"), "mm"),
+    (re.compile(r"a+h+"), "ah"),
+)
+PHRASE_FILLERS = {
+    ("you", "know"): "you know",
+    ("sort", "of"): "sort of",
+    ("kind", "of"): "kind of",
+    ("i", "mean"): "i mean",
 }
+STARTING_FILLERS = {
+    "so", "well", "basically", "literally", "actually",
+    "honestly", "anyway",
+}
+TERMINAL_BREAK_CHARS = ",.;:!?"
+BREAK_GAP_SECONDS = 0.35
+SEMANTIC_SO_NEXT = {"that", "much", "many", "far", "long"}
+SEMANTIC_OKAY_NEXT = {"with", "for", "to"}
+SEMANTIC_PHRASE_PREV = {
+    "a", "an", "the", "this", "that", "what", "which", "some", "any",
+}
+LIKE_SEMANTIC_PREV = {
+    "feel", "feels", "felt", "look", "looks", "looked",
+    "seem", "seems", "seemed", "sound", "sounds", "sounded",
+}
+BE_WORDS = {"am", "are", "is", "was", "were", "be", "been", "being"}
 
 WORD_STRIP_CHARS = string.punctuation
 
@@ -125,6 +152,22 @@ def localize_pauses(
     ]
 
 
+def localize_fillers(
+    fillers: list[FillerWord],
+    start_offset: float,
+    end_offset: float,
+) -> list[FillerWord]:
+    return [
+        FillerWord(
+            word=filler.word,
+            timestamp=round(filler.timestamp - start_offset, 2),
+            count=filler.count,
+        )
+        for filler in fillers
+        if start_offset <= filler.timestamp < end_offset
+    ]
+
+
 class AudioAnalysisService:
     def __init__(self):
         self._wpm_history: list[float] = []
@@ -145,6 +188,9 @@ class AudioAnalysisService:
 
         return filler_words, speed, pauses, feedback
 
+    def detect_fillers(self, segments: list) -> list[FillerWord]:
+        return self._detect_fillers(segments)
+
     def _collect_words(self, segments: list) -> list[dict]:
         words_data: list[dict] = []
         for seg in segments:
@@ -152,33 +198,161 @@ class AudioAnalysisService:
         return words_data
 
     def _normalize_word(self, word: str) -> str:
-        return word.strip().lower().strip(WORD_STRIP_CHARS)
+        normalized = word.strip().lower().strip(WORD_STRIP_CHARS)
+        return "okay" if normalized == "ok" else normalized
+
+    def _float_or_none(self, value: object) -> float | None:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _word_start(self, word_data: dict) -> float:
+        return self._float_or_none(word_data.get("start")) or 0.0
+
+    def _raw_word(self, word_data: dict) -> str:
+        return str(word_data.get("word", ""))
+
+    def _has_trailing_break(self, word_data: dict) -> bool:
+        return self._raw_word(word_data).strip().endswith(tuple(TERMINAL_BREAK_CHARS))
+
+    def _word_at(self, words_data: list[dict], index: int) -> str:
+        if index < 0 or index >= len(words_data):
+            return ""
+        return self._normalize_word(self._raw_word(words_data[index]))
+
+    def _gap_before(self, words_data: list[dict], index: int) -> float | None:
+        if index <= 0:
+            return None
+        start = self._float_or_none(words_data[index].get("start"))
+        previous_end = self._float_or_none(words_data[index - 1].get("end"))
+        if start is None or previous_end is None:
+            return None
+        return start - previous_end
+
+    def _gap_after(self, words_data: list[dict], index: int) -> float | None:
+        if index >= len(words_data) - 1:
+            return None
+        end = self._float_or_none(words_data[index].get("end"))
+        next_start = self._float_or_none(words_data[index + 1].get("start"))
+        if end is None or next_start is None:
+            return None
+        return next_start - end
+
+    def _is_boundary_before(self, words_data: list[dict], index: int) -> bool:
+        if index == 0:
+            return True
+        gap = self._gap_before(words_data, index)
+        return self._has_trailing_break(words_data[index - 1]) or (
+            gap is not None and gap >= BREAK_GAP_SECONDS
+        )
+
+    def _has_break_after(self, words_data: list[dict], index: int) -> bool:
+        gap = self._gap_after(words_data, index)
+        return self._has_trailing_break(words_data[index]) or (
+            gap is not None and gap >= BREAK_GAP_SECONDS
+        )
+
+    def _canonical_hesitation(self, word: str) -> str | None:
+        for pattern, canonical in HESITATION_FILLERS:
+            if pattern.fullmatch(word):
+                return canonical
+        return None
+
+    def _canonical_phrase_filler(
+        self,
+        words_data: list[dict],
+        index: int,
+        phrase: str,
+    ) -> str | None:
+        previous_word = self._word_at(words_data, index - 1)
+
+        if phrase in {"i mean", "you know"}:
+            if self._is_boundary_before(words_data, index) and self._has_break_after(
+                words_data,
+                index + 1,
+            ):
+                return phrase
+            return None
+
+        if phrase in {"sort of", "kind of"} and previous_word in SEMANTIC_PHRASE_PREV:
+            return None
+
+        return phrase
+
+    def _canonical_contextual_filler(
+        self,
+        words_data: list[dict],
+        index: int,
+        word: str,
+    ) -> str | None:
+        previous_word = self._word_at(words_data, index - 1)
+        next_word = self._word_at(words_data, index + 1)
+        boundary_before = self._is_boundary_before(words_data, index)
+
+        if word in STARTING_FILLERS:
+            if not boundary_before:
+                return None
+            if word == "so" and next_word in SEMANTIC_SO_NEXT:
+                return None
+            return word
+
+        if word == "okay":
+            if boundary_before and next_word not in SEMANTIC_OKAY_NEXT:
+                return word
+            return None
+
+        if word == "right":
+            return word if boundary_before else None
+
+        if word == "like":
+            if previous_word in LIKE_SEMANTIC_PREV:
+                return None
+            if previous_word in BE_WORDS:
+                return word
+            if boundary_before or self._has_break_after(words_data, index):
+                return word
+
+        return None
+
+    def _append_filler(
+        self,
+        found: list[FillerWord],
+        word: str,
+        timestamp: float,
+    ) -> None:
+        self._session_filler_counts[word] += 1
+        found.append(FillerWord(
+            word=word,
+            timestamp=timestamp,
+            count=self._session_filler_counts[word],
+        ))
 
     def _detect_fillers(self, segments: list) -> list[FillerWord]:
         found: list[FillerWord] = []
         words_data = self._collect_words(segments)
 
         for i, w in enumerate(words_data):
-            word = self._normalize_word(w.get("word", ""))
-
-            if word in FILLER_WORDS:
-                self._session_filler_counts[word] += 1
-                found.append(FillerWord(
-                    word=word,
-                    timestamp=w.get("start", 0.0),
-                    count=self._session_filler_counts[word],
-                ))
+            word = self._word_at(words_data, i)
+            if not word:
+                continue
 
             if i < len(words_data) - 1:
-                next_word = self._normalize_word(words_data[i + 1].get("word", ""))
-                bigram = f"{word} {next_word}"
-                if bigram in FILLER_WORDS:
-                    self._session_filler_counts[bigram] += 1
-                    found.append(FillerWord(
-                        word=bigram,
-                        timestamp=w.get("start", 0.0),
-                        count=self._session_filler_counts[bigram],
-                    ))
+                next_word = self._word_at(words_data, i + 1)
+                phrase = PHRASE_FILLERS.get((word, next_word))
+                if phrase:
+                    contextual_phrase = self._canonical_phrase_filler(words_data, i, phrase)
+                    if contextual_phrase:
+                        self._append_filler(found, contextual_phrase, self._word_start(w))
+
+            hesitation = self._canonical_hesitation(word)
+            if hesitation:
+                self._append_filler(found, hesitation, self._word_start(w))
+                continue
+
+            contextual = self._canonical_contextual_filler(words_data, i, word)
+            if contextual:
+                self._append_filler(found, contextual, self._word_start(w))
 
         return found
 
@@ -259,9 +433,9 @@ class AudioAnalysisService:
             ))
 
         if len(fillers) >= 2:
-            unique = list({f.word for f in fillers})
+            filler_word = Counter(f.word for f in fillers).most_common(1)[0][0]
             feedback.append(ImmediateFeedback(
-                message=f"Watch the '{unique[0]}' — try pausing instead",
+                message=f"Watch the '{filler_word}' — try pausing instead",
                 type="filler",
                 severity="info",
             ))

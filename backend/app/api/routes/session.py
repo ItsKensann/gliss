@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.models.session import AnalysisResult, FaceMetrics, Pause
-from app.services.audio_analysis import AudioAnalysisService, localize_pauses
+from app.services.audio_analysis import AudioAnalysisService, localize_fillers, localize_pauses
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
 from app.services.transcription import MIN_TRANSCRIBE_SECONDS, TranscriptionService
@@ -97,6 +97,8 @@ def _build_final_report_chunks(
         return []
 
     analysis = AudioAnalysisService()
+    filler_analysis = AudioAnalysisService()
+    all_fillers = filler_analysis.detect_fillers([{"words": words}])
     audio_duration = float(final_result.get("audio_duration") or 0.0)
     word_pauses = _final_word_pauses(words)
     audio_pause_list = audio_pauses or []
@@ -138,7 +140,8 @@ def _build_final_report_chunks(
             "audio_duration": chunk_duration,
         }
 
-        fillers, speed, detected_pauses, _ = analysis.analyze_transcript(chunk_result)
+        _, speed, detected_pauses, _ = analysis.analyze_transcript(chunk_result)
+        fillers = localize_fillers(all_fillers, start_offset, end_offset)
         pauses = localize_pauses(global_pauses, start_offset, end_offset)
         if not audio_pause_list and not pauses:
             pauses = detected_pauses
