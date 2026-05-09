@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.models.session import AnalysisResult, FaceMetrics, Pause
-from app.services.audio_analysis import AudioAnalysisService
+from app.services.audio_analysis import AudioAnalysisService, localize_pauses
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
 from app.services.transcription import MIN_TRANSCRIBE_SECONDS, TranscriptionService
@@ -67,14 +67,18 @@ def _final_words(segments: list[dict]) -> list[dict]:
     return words
 
 
-def _final_word_pauses(words: list[dict]) -> list[tuple[float, float, float]]:
-    pauses: list[tuple[float, float, float]] = []
+def _final_word_pauses(words: list[dict]) -> list[Pause]:
+    pauses: list[Pause] = []
     for previous, current in zip(words, words[1:]):
         gap_start = float(previous["end"])
         gap_end = float(current["start"])
         duration = gap_end - gap_start
         if duration >= 0.8:
-            pauses.append((gap_start, gap_end, duration))
+            pauses.append(Pause(
+                start=round(gap_start, 2),
+                end=round(gap_end, 2),
+                duration=round(duration, 2),
+            ))
     return pauses
 
 
@@ -86,6 +90,7 @@ def _build_final_report_chunks(
     final_result: dict,
     face_metric_samples: list[tuple[datetime, FaceMetrics]],
     report_started_at: datetime,
+    audio_pauses: list[Pause] | None = None,
 ) -> list[AnalysisResult]:
     words = _final_words(final_result.get("segments", []))
     if not words:
@@ -93,7 +98,11 @@ def _build_final_report_chunks(
 
     analysis = AudioAnalysisService()
     audio_duration = float(final_result.get("audio_duration") or 0.0)
-    global_pauses = _final_word_pauses(words)
+    word_pauses = _final_word_pauses(words)
+    audio_pause_list = audio_pauses or []
+    global_pauses = audio_pause_list or word_pauses
+    logger.debug("Final word pause candidates: %s", [p.model_dump() for p in word_pauses])
+    logger.debug("Final audio pause candidates: %s", [p.model_dump() for p in audio_pause_list])
     grouped_words: dict[int, list[dict]] = {}
     for word in words:
         window_index = int(max(0.0, float(word["start"])) // FINAL_REPORT_WINDOW_SECONDS)
@@ -129,19 +138,18 @@ def _build_final_report_chunks(
             "audio_duration": chunk_duration,
         }
 
-        fillers, speed, detected_pauses, immediate_feedback = analysis.analyze_transcript(chunk_result)
-        pauses = [
-            Pause(
-                start=round(pause_start - start_offset, 2),
-                end=round(pause_end - start_offset, 2),
-                duration=round(duration, 2),
-            )
-            for pause_start, pause_end, duration in global_pauses
-            if start_offset <= pause_start < end_offset
-        ]
-        if not pauses:
+        fillers, speed, detected_pauses, _ = analysis.analyze_transcript(chunk_result)
+        pauses = localize_pauses(global_pauses, start_offset, end_offset)
+        if not audio_pause_list and not pauses:
             pauses = detected_pauses
+        immediate_feedback = analysis._generate_immediate_feedback(fillers, speed, pauses)
         breath_advice = analysis.suggest_breath_control(speed, pauses)
+        logger.debug(
+            "Final chunk %.2f-%.2f pause assignments: %s",
+            start_offset,
+            end_offset,
+            [p.model_dump() for p in pauses],
+        )
 
         eye_snapshot, head_snapshot = _average_face_metrics(
             face_metric_samples,
@@ -430,6 +438,17 @@ async def session_websocket(
             )
             final_text = final_result["text"].strip()
             if final_text:
+                audio_pauses = transcription.detect_full_session_pauses()
+                logger.info(
+                    "Session %s audio pause detection found %d pauses",
+                    session_id,
+                    len(audio_pauses),
+                )
+                logger.debug(
+                    "Session %s audio pause details: %s",
+                    session_id,
+                    [p.model_dump() for p in audio_pauses],
+                )
                 live_ai_feedback = [chunk.ai_feedback for chunk in chunks if chunk.ai_feedback]
                 live_coherence_scores = [
                     chunk.coherence_score
@@ -440,6 +459,7 @@ async def session_websocket(
                     final_result,
                     face_metric_samples,
                     report_started_at,
+                    audio_pauses,
                 )
                 for final_chunk, note in zip(final_chunks, live_ai_feedback):
                     final_chunk.ai_feedback = note

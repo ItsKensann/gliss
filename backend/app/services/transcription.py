@@ -6,6 +6,8 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from app.core.config import settings
+from app.models.session import Pause
+from app.services.audio_analysis import detect_audio_pauses
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +134,14 @@ class TranscriptionService:
         else:
             logger.info("Final session transcript empty")
         return result
+
+    def detect_full_session_pauses(self) -> list[Pause]:
+        with self._lock:
+            if not self._full_audio_chunks:
+                return []
+            audio = np.concatenate(self._full_audio_chunks).astype(np.float32, copy=False)
+
+        return detect_audio_pauses(audio, TARGET_SR)
 
     def get_buffer_duration(self) -> float:
         with self._lock:
