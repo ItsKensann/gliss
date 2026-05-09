@@ -64,7 +64,7 @@ export function SessionReport({ report }: Props) {
             {report.is_finalized === false && (
               <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
                 <div className="w-3 h-3 rounded-full border-2 border-indigo-400/50 border-t-transparent animate-spin" />
-                <span>Finalizing trailing audio…</span>
+                <span>Finalizing transcript…</span>
               </div>
             )}
           </div>

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app.models.session import AnalysisResult, FaceMetrics
+from app.models.session import AnalysisResult, FaceMetrics, Pause
 from app.services.audio_analysis import AudioAnalysisService
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ANALYSIS_INTERVAL = 5.0
+FINAL_REPORT_WINDOW_SECONDS = 10.0
 _whisper_executor = ThreadPoolExecutor(max_workers=1)
 
 
@@ -48,6 +49,122 @@ def _average_face_metrics(
         round(sum(eye_values) / len(eye_values), 3),
         round(sum(head_values) / len(head_values), 3),
     )
+
+
+def _final_words(segments: list[dict]) -> list[dict]:
+    words: list[dict] = []
+    for segment in segments:
+        for word in segment.get("words", []):
+            text = str(word.get("word", "")).strip()
+            if not text:
+                continue
+            start = _float_value(word.get("start"), 0.0)
+            end = _float_value(word.get("end"), start)
+            if end < start:
+                end = start
+            words.append({"word": text, "start": start, "end": end})
+    words.sort(key=lambda w: w["start"])
+    return words
+
+
+def _final_word_pauses(words: list[dict]) -> list[tuple[float, float, float]]:
+    pauses: list[tuple[float, float, float]] = []
+    for previous, current in zip(words, words[1:]):
+        gap_start = float(previous["end"])
+        gap_end = float(current["start"])
+        duration = gap_end - gap_start
+        if duration >= 0.8:
+            pauses.append((gap_start, gap_end, duration))
+    return pauses
+
+
+def _final_chunk_text(words: list[dict]) -> str:
+    return " ".join(word["word"].strip() for word in words).strip()
+
+
+def _build_final_report_chunks(
+    final_result: dict,
+    face_metric_samples: list[tuple[datetime, FaceMetrics]],
+    report_started_at: datetime,
+) -> list[AnalysisResult]:
+    words = _final_words(final_result.get("segments", []))
+    if not words:
+        return []
+
+    analysis = AudioAnalysisService()
+    audio_duration = float(final_result.get("audio_duration") or 0.0)
+    global_pauses = _final_word_pauses(words)
+    grouped_words: dict[int, list[dict]] = {}
+    for word in words:
+        window_index = int(max(0.0, float(word["start"])) // FINAL_REPORT_WINDOW_SECONDS)
+        grouped_words.setdefault(window_index, []).append(word)
+
+    chunks: list[AnalysisResult] = []
+    for window_index in sorted(grouped_words):
+        group = grouped_words[window_index]
+        start_offset = window_index * FINAL_REPORT_WINDOW_SECONDS
+        natural_end = start_offset + FINAL_REPORT_WINDOW_SECONDS
+        end_offset = min(natural_end, audio_duration) if audio_duration else natural_end
+        end_offset = max(end_offset, float(group[-1]["end"]))
+        chunk_duration = max(0.1, end_offset - start_offset)
+        transcript = _final_chunk_text(group)
+
+        local_words = [
+            {
+                "word": word["word"],
+                "start": round(max(0.0, float(word["start"]) - start_offset), 2),
+                "end": round(max(0.0, float(word["end"]) - start_offset), 2),
+            }
+            for word in group
+        ]
+        segment = {
+            "start": local_words[0]["start"],
+            "end": local_words[-1]["end"],
+            "text": transcript,
+            "words": local_words,
+        }
+        chunk_result = {
+            "text": transcript,
+            "segments": [segment],
+            "audio_duration": chunk_duration,
+        }
+
+        fillers, speed, detected_pauses, immediate_feedback = analysis.analyze_transcript(chunk_result)
+        pauses = [
+            Pause(
+                start=round(pause_start - start_offset, 2),
+                end=round(pause_end - start_offset, 2),
+                duration=round(duration, 2),
+            )
+            for pause_start, pause_end, duration in global_pauses
+            if start_offset <= pause_start < end_offset
+        ]
+        if not pauses:
+            pauses = detected_pauses
+        breath_advice = analysis.suggest_breath_control(speed, pauses)
+
+        eye_snapshot, head_snapshot = _average_face_metrics(
+            face_metric_samples,
+            report_started_at + timedelta(seconds=start_offset),
+            report_started_at + timedelta(seconds=end_offset),
+        )
+
+        chunks.append(AnalysisResult(
+            transcript=transcript,
+            filler_words=fillers,
+            speed=speed,
+            pauses=pauses,
+            breath_advice=breath_advice,
+            immediate_feedback=immediate_feedback,
+            coherence_score=None,
+            ai_feedback="",
+            start_offset_seconds=round(start_offset, 2),
+            end_offset_seconds=round(end_offset, 2),
+            avg_eye_contact=eye_snapshot,
+            avg_head_stability=head_snapshot,
+        ))
+
+    return chunks
 
 
 async def _run_transcription_cycle(
@@ -305,6 +422,38 @@ async def session_websocket(
             )
         except Exception:
             logger.exception("Final transcription cycle failed; saving as-is")
+
+        try:
+            final_result = await loop.run_in_executor(
+                _whisper_executor,
+                transcription.transcribe_full_session,
+            )
+            final_text = final_result["text"].strip()
+            if final_text:
+                live_ai_feedback = [chunk.ai_feedback for chunk in chunks if chunk.ai_feedback]
+                live_coherence_scores = [
+                    chunk.coherence_score
+                    for chunk in chunks
+                    if chunk.coherence_score is not None
+                ]
+                final_chunks = _build_final_report_chunks(
+                    final_result,
+                    face_metric_samples,
+                    report_started_at,
+                )
+                for final_chunk, note in zip(final_chunks, live_ai_feedback):
+                    final_chunk.ai_feedback = note
+                for final_chunk, score in zip(final_chunks, live_coherence_scores):
+                    final_chunk.coherence_score = score
+                full_transcript = final_text
+                if final_chunks:
+                    chunks = final_chunks
+                logger.info(
+                    "Session %s final full-pass transcript applied (%d chunks)",
+                    session_id, len(final_chunks),
+                )
+        except Exception:
+            logger.exception("Full-session transcription failed; keeping live chunks")
 
         _save(is_finalized=True)
         logger.info(
