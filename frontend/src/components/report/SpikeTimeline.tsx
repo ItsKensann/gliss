@@ -57,7 +57,7 @@ function buildMarkers(chunks: AnalysisResult[], paceEvents: PaceEvent[]): Marker
     }
 
     for (const pause of chunk.pauses) {
-      if (pause.duration > 2.0) {
+      if (pause.duration > 4.0) {
         markers.push({
           lane: "pause",
           timeSec: start + pause.start,
