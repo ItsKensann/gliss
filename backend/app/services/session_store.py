@@ -124,7 +124,7 @@ def delete_session(session_id: str) -> bool:
     if not path.exists():
         return False
     path.unlink()
-    logger.info("Deleted session %s", session_id)
+    logger.info("Deleted  %s", session_id)
     return True
 
 
