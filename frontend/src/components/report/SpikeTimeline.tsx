@@ -1,9 +1,10 @@
 "use client"
 
-import type { AnalysisResult } from "@/lib/types"
+import type { AnalysisResult, PaceEvent } from "@/lib/types"
 
 interface Props {
   chunks: AnalysisResult[]
+  paceEvents: PaceEvent[]
   durationSeconds: number
 }
 
@@ -22,23 +23,23 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-function buildMarkers(chunks: AnalysisResult[]): Marker[] {
+function buildMarkers(chunks: AnalysisResult[], paceEvents: PaceEvent[]): Marker[] {
   const markers: Marker[] = []
+  for (const event of paceEvents) {
+    markers.push({
+      lane: "pace",
+      timeSec: event.start_seconds,
+      title: "Pace spike",
+      detail: `${Math.round(event.wpm)} WPM, ${Math.round((event.spike_factor - 1) * 100)}% above baseline`,
+      excerpt: event.excerpt,
+    })
+  }
+
   for (const chunk of chunks) {
     const start = chunk.start_offset_seconds ?? 0
     const excerpt = chunk.transcript.length > 90
       ? `${chunk.transcript.slice(0, 90).trim()}…`
       : chunk.transcript
-
-    if (chunk.speed.is_spike) {
-      markers.push({
-        lane: "pace",
-        timeSec: start,
-        title: "Pace spike",
-        detail: `${Math.round(chunk.speed.current_wpm)} WPM (${Math.round((chunk.speed.spike_factor - 1) * 100)}% above baseline)`,
-        excerpt,
-      })
-    }
 
     if (chunk.filler_words.length >= 3) {
       const counts: Record<string, number> = {}
@@ -76,8 +77,8 @@ const LANE_META = {
   pause: { label: "Pauses", color: "bg-gray-400", ring: "ring-gray-300/40" },
 } as const
 
-export function SpikeTimeline({ chunks, durationSeconds }: Props) {
-  const hasOffsets = chunks.some((c) => (c.end_offset_seconds ?? 0) > 0)
+export function SpikeTimeline({ chunks, paceEvents, durationSeconds }: Props) {
+  const hasOffsets = chunks.some((c) => (c.end_offset_seconds ?? 0) > 0) || paceEvents.length > 0
 
   if (!hasOffsets) {
     return (
@@ -92,7 +93,7 @@ export function SpikeTimeline({ chunks, durationSeconds }: Props) {
     )
   }
 
-  const markers = buildMarkers(chunks)
+  const markers = buildMarkers(chunks, paceEvents)
   const total = Math.max(durationSeconds, 1)
   const lanes: Array<keyof typeof LANE_META> = ["pace", "filler", "pause"]
 

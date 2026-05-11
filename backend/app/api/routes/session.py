@@ -8,7 +8,12 @@ from time import perf_counter
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.models.session import AnalysisResult, FaceMetrics, Pause, SessionReport
-from app.services.audio_analysis import AudioAnalysisService, localize_fillers, localize_pauses
+from app.services.audio_analysis import (
+    AudioAnalysisService,
+    detect_pace_events,
+    localize_fillers,
+    localize_pauses,
+)
 from app.services.feedback import get_ai_feedback, get_coherence_score
 from app.services.session_store import build_report, save_report
 from app.services.transcription import MIN_TRANSCRIBE_SECONDS, TranscriptionService
@@ -44,6 +49,7 @@ def _report_debug_stats(report: SessionReport) -> dict:
         "total_pauses": report.summary.total_pauses,
         "avg_wpm": report.summary.avg_wpm,
         "peak_wpm": report.summary.peak_wpm,
+        "pace_events": len(report.pace_events),
     }
 
 
@@ -413,6 +419,7 @@ async def session_websocket(
         #   was killed without a control message — older clients or crashes).
         report_started_at = first_audio_at_ref[0] or started_at
         report_ended_at = recording_end_at_ref[0] or datetime.now(timezone.utc)
+        pace_events = []
 
         def _save(is_finalized: bool) -> None:
             save_started = perf_counter()
@@ -425,6 +432,7 @@ async def session_websocket(
                 prompt=prompt_ref[0],
                 target_duration_seconds=target_duration_ref[0],
                 is_finalized=is_finalized,
+                pace_events=pace_events,
             )
             save_report(report)
             logger.info(
@@ -509,6 +517,10 @@ async def session_websocket(
                     for chunk in chunks
                     if chunk.coherence_score is not None
                 ]
+                pace_events = detect_pace_events(
+                    final_result.get("segments", []),
+                    float(final_result.get("audio_duration") or 0.0),
+                )
                 rebuild_started = perf_counter()
                 final_chunks = _build_final_report_chunks(
                     final_result,

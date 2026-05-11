@@ -17,6 +17,16 @@ export interface SpeedAnalysis {
   spike_factor: number
 }
 
+export interface PaceEvent {
+  type: "fast"
+  start_seconds: number
+  end_seconds: number
+  wpm: number
+  baseline_wpm: number
+  spike_factor: number
+  excerpt: string
+}
+
 export interface BreathAdvice {
   should_pause: boolean
   suggested_pause_location?: string
@@ -87,6 +97,7 @@ export interface SessionReportData {
   duration_seconds: number
   full_transcript: string
   chunks: AnalysisResult[]
+  pace_events: PaceEvent[]
   summary: SessionSummary
   prompt?: string
   target_duration_seconds?: number

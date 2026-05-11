@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Literal, Optional
 
 
 class FillerWord(BaseModel):
@@ -19,6 +19,16 @@ class SpeedAnalysis(BaseModel):
     baseline_wpm: float
     is_spike: bool
     spike_factor: float
+
+
+class PaceEvent(BaseModel):
+    type: Literal["fast"] = "fast"
+    start_seconds: float
+    end_seconds: float
+    wpm: float
+    baseline_wpm: float
+    spike_factor: float
+    excerpt: str
 
 
 class FaceMetrics(BaseModel):
@@ -86,6 +96,7 @@ class SessionReport(BaseModel):
     duration_seconds: float
     full_transcript: str
     chunks: list[AnalysisResult]
+    pace_events: list[PaceEvent] = Field(default_factory=list)
     summary: SessionSummary
     prompt: Optional[str] = None
     target_duration_seconds: Optional[float] = None

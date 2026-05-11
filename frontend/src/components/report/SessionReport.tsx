@@ -145,7 +145,11 @@ export function SessionReport({ report }: Props) {
 
         {/* Timeline */}
         {report.chunks.length > 0 && (
-          <SpikeTimeline chunks={report.chunks} durationSeconds={report.duration_seconds} />
+          <SpikeTimeline
+            chunks={report.chunks}
+            paceEvents={report.pace_events ?? []}
+            durationSeconds={report.duration_seconds}
+          />
         )}
 
         {/* Filler words */}

@@ -9,6 +9,7 @@ from app.models.session import (
     BreathAdvice,
     FillerWord,
     ImmediateFeedback,
+    PaceEvent,
     Pause,
     SpeedAnalysis,
 )
@@ -46,6 +47,13 @@ LIKE_SEMANTIC_PREV = {
 BE_WORDS = {"am", "are", "is", "was", "were", "be", "been", "being"}
 
 WORD_STRIP_CHARS = string.punctuation
+PACE_WINDOW_SECONDS = 4.0
+PACE_STEP_SECONDS = 2.0
+PACE_MIN_BASELINE_WINDOWS = 3
+PACE_BASELINE_WINDOWS = 5
+PACE_MIN_WORDS_PER_WINDOW = 3
+PACE_SPIKE_FACTOR = 1.35
+PACE_MIN_FAST_WPM = 120.0
 
 
 def detect_audio_pauses(
@@ -166,6 +174,121 @@ def localize_fillers(
         for filler in fillers
         if start_offset <= filler.timestamp < end_offset
     ]
+
+
+def detect_pace_events(
+    segments: list[dict],
+    audio_duration: float = 0.0,
+) -> list[PaceEvent]:
+    words = _timestamped_words(segments)
+    if not words:
+        return []
+
+    duration = max(
+        float(audio_duration or 0.0),
+        max((word["end"] for word in words), default=0.0),
+    )
+    if duration < PACE_WINDOW_SECONDS:
+        return []
+
+    windows = _pace_windows(words, duration)
+    baseline_candidates = [
+        window for window in windows if len(window["words"]) >= PACE_MIN_WORDS_PER_WINDOW
+    ][:PACE_BASELINE_WINDOWS]
+    if len(baseline_candidates) < PACE_MIN_BASELINE_WINDOWS:
+        return []
+
+    baseline_wpm = sum(window["wpm"] for window in baseline_candidates) / len(baseline_candidates)
+    if baseline_wpm <= 0:
+        return []
+
+    baseline_ready_at = baseline_candidates[-1]["start"]
+    fast_windows = [
+        window
+        for window in windows
+        if window["start"] > baseline_ready_at
+        and window["wpm"] >= baseline_wpm * PACE_SPIKE_FACTOR
+        and window["wpm"] >= PACE_MIN_FAST_WPM
+    ]
+
+    events: list[PaceEvent] = []
+    group: list[dict] = []
+    for window in fast_windows:
+        if group and round(window["start"] - group[-1]["start"], 6) > PACE_STEP_SECONDS:
+            events.append(_pace_event_from_windows(group, words, baseline_wpm, duration))
+            group = []
+        group.append(window)
+    if group:
+        events.append(_pace_event_from_windows(group, words, baseline_wpm, duration))
+
+    return events
+
+
+def _timestamped_words(segments: list[dict]) -> list[dict]:
+    words: list[dict] = []
+    for segment in segments:
+        for item in segment.get("words", []):
+            text = str(item.get("word", "")).strip()
+            if not text:
+                continue
+            try:
+                start = float(item.get("start"))
+            except (TypeError, ValueError):
+                continue
+            try:
+                end = float(item.get("end"))
+            except (TypeError, ValueError):
+                end = start
+            if start < 0:
+                continue
+            words.append({
+                "word": text,
+                "start": start,
+                "end": max(start, end),
+            })
+    words.sort(key=lambda word: word["start"])
+    return words
+
+
+def _pace_windows(words: list[dict], duration: float) -> list[dict]:
+    windows: list[dict] = []
+    start = 0.0
+    while start < duration:
+        end = start + PACE_WINDOW_SECONDS
+        window_words = [word for word in words if start <= word["start"] < end]
+        windows.append({
+            "start": start,
+            "end": end,
+            "words": window_words,
+            "wpm": len(window_words) / PACE_WINDOW_SECONDS * 60,
+        })
+        start += PACE_STEP_SECONDS
+    return windows
+
+
+def _pace_event_from_windows(
+    windows: list[dict],
+    words: list[dict],
+    baseline_wpm: float,
+    duration: float,
+) -> PaceEvent:
+    start = float(windows[0]["start"])
+    end = min(duration, float(windows[-1]["end"]))
+    peak_wpm = max(float(window["wpm"]) for window in windows)
+    event_words = [word["word"] for word in words if start <= word["start"] < end]
+    excerpt_words = event_words[:16]
+    excerpt = " ".join(excerpt_words).strip()
+    if len(event_words) > len(excerpt_words):
+        excerpt = f"{excerpt}..."
+
+    return PaceEvent(
+        start_seconds=round(start, 2),
+        end_seconds=round(end, 2),
+        wpm=round(peak_wpm, 1),
+        baseline_wpm=round(baseline_wpm, 1),
+        spike_factor=round(peak_wpm / baseline_wpm, 2),
+        excerpt=excerpt,
+    )
 
 
 class AudioAnalysisService:

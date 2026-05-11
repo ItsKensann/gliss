@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.models.session import AnalysisResult, SessionListItem, SessionReport, SessionSummary
+from app.models.session import AnalysisResult, PaceEvent, SessionListItem, SessionReport, SessionSummary
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ def build_report(
     prompt: str | None = None,
     target_duration_seconds: float | None = None,
     is_finalized: bool = True,
+    pace_events: list[PaceEvent] | None = None,
 ) -> SessionReport:
     filler_counts: dict[str, int] = defaultdict(int)
     wpm_values: list[float] = []
@@ -72,6 +73,7 @@ def build_report(
         duration_seconds=round(duration, 1),
         full_transcript=full_transcript.strip(),
         chunks=chunks,
+        pace_events=pace_events or [],
         summary=summary,
         prompt=prompt,
         target_duration_seconds=target_duration_seconds,
