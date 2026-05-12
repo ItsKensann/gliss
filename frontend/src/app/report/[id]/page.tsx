@@ -69,6 +69,7 @@ export default function ReportPage() {
           elapsed_ms: Math.round(performance.now() - requestedAt),
           stats: reportDebugStats(data),
         })
+        setReport(data)
         if (data.is_finalized === false) {
           console.debug("[Gliss report] waiting for finalized report", {
             session_id: id,
@@ -77,7 +78,6 @@ export default function ReportPage() {
           setTimeout(() => setAttempts((n) => n + 1), 1500)
           return
         }
-        setReport(data)
       } catch (error) {
         console.debug("[Gliss report] fetch error", {
           session_id: id,

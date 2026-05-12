@@ -1,7 +1,7 @@
 """Post-session structured coaching feedback.
 
-One call per finalized SessionReport. Pluggable via settings.feedback_provider —
-the mock backend uses the report's own heuristic metrics to produce realistic
+One call per finalized SessionReport. Pluggable via settings.feedback_provider.
+The mock backend uses the report's own heuristic metrics to produce realistic
 output during development without spending API credits or running a local model.
 """
 from __future__ import annotations
@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 FEEDBACK_VERSION = "v1"
 
 # Thresholds used by the mock to pick what's worth focusing on. These are
-# rough rules of thumb that match the heuristic detectors — when we swap in a
-# real LLM, the prompt rubric will mirror these same buckets so output across
+# rough rules of thumb that match the heuristic detectors. When we swap in a
+# real LLM, the prompt rubric should mirror these same buckets so output across
 # providers stays comparable.
 FILLER_RATE_HIGH = 0.04      # >4% of words are fillers
 FILLER_RATE_LOW = 0.015      # <1.5% is genuinely clean
 PACE_FAST_WPM = 170.0
 PACE_SLOW_WPM = 110.0
-PAUSE_RATE_LOW = 0.5         # pauses per minute below this = monotone
+PAUSE_RATE_LOW = 0.5         # pauses per minute below this = few deliberate resets
 EYE_CONTACT_LOW = 0.6
 EYE_CONTACT_STRONG = 0.8
 
@@ -93,8 +93,8 @@ class MockFeedbackProvider:
             secondary_focuses=secondary,
             drill_suggestion=_drill_for(priority.area),
             encouragement=(
-                "One run at a time — pick the priority focus, work it for a "
-                "session or two, then move on. You're building this."
+                "One focused practice point is enough for the next session. "
+                "Work the priority focus first, then come back for another rep."
             ),
             feedback_version=FEEDBACK_VERSION,
             generated_by="mock",
@@ -118,16 +118,17 @@ def _pick_focuses(
         focuses.append(Focus(
             area="fillers",
             observation=(
-                f'"{top_filler}" appeared {filler_total} times — about '
+                f'"{top_filler}" appeared {filler_total} times, about '
                 f"{filler_rate * 100:.0f}% of your words were fillers."
             ),
             why_it_matters=(
-                "Fillers leak certainty. Listeners pick up on them faster than you "
-                "do, and they make even good ideas sound tentative."
+                "Fillers are common, but repeated fillers can make it harder to "
+                "hear the main point clearly."
             ),
             fix=(
                 f'When you feel "{top_filler}" coming, close your mouth and pause '
-                "for a beat instead. The silence reads as confidence."
+                "for one beat instead. A short pause gives you time to choose the "
+                "next word."
             ),
             excerpt=_excerpt_around(transcript, top_filler),
         ))
@@ -137,41 +138,41 @@ def _pick_focuses(
             area="pace",
             observation=(
                 f"Average pace was {avg_wpm:.0f} WPM with peaks up to "
-                f"{peak_wpm:.0f} — most listeners absorb best around 140–160."
+                f"{peak_wpm:.0f}. A comfortable practice target is 140-160 WPM."
             ),
             why_it_matters=(
-                "Fast pace compresses your ideas. The audience misses the part "
-                "you most want them to remember."
+                "When pace climbs, articulation and breathing usually get harder. "
+                "Slowing down gives each phrase more room."
             ),
             fix=(
                 "Slow your opening sentence by 30%. Once your pace anchors low, "
-                "the rest of the talk tends to follow."
+                "the rest of the practice usually follows."
             ),
         ))
     elif avg_wpm and avg_wpm < PACE_SLOW_WPM:
         focuses.append(Focus(
             area="pace",
-            observation=f"Average pace was {avg_wpm:.0f} WPM — on the slow side of conversational.",
+            observation=f"Average pace was {avg_wpm:.0f} WPM, which is on the slower side.",
             why_it_matters=(
-                "Too slow and you lose momentum; the audience starts predicting "
-                "your sentences instead of listening."
+                "A very slow pace can make connected speech feel less natural. "
+                "The goal is steady, comfortable movement from phrase to phrase."
             ),
-            fix="Lift energy on the verbs. Aim for 130–150 WPM as a comfortable target.",
+            fix="Practice the same answer again with a little more energy on the main verbs.",
         ))
 
     if pauses_per_min < PAUSE_RATE_LOW and avg_wpm and avg_wpm > 100:
         focuses.append(Focus(
             area="pauses",
             observation=(
-                f"You paused {pauses_per_min:.1f} times per minute — most strong "
-                "speakers land 1–2 deliberate pauses per minute."
+                f"You paused {pauses_per_min:.1f} times per minute. Most practice "
+                "sessions benefit from 1-2 deliberate pauses per minute."
             ),
             why_it_matters=(
-                "Pauses are where ideas land. Without them everything blurs into "
-                "one continuous block."
+                "Pauses support breathing and give you a clean reset before the "
+                "next phrase."
             ),
             fix=(
-                "Mark 2–3 sentences in your prep that deserve a beat after them. "
+                "Mark 2-3 sentences in your prep that deserve a beat after them. "
                 "Practice holding the silence for two full seconds."
             ),
         ))
@@ -180,16 +181,16 @@ def _pick_focuses(
         focuses.append(Focus(
             area="eye_contact",
             observation=(
-                f"Eye contact landed around {eye_contact * 100:.0f}% — well below "
-                "the 70%+ range that reads as engaged."
+                f"Eye contact landed around {eye_contact * 100:.0f}%, below the "
+                "70%+ range that reads as engaged on camera."
             ),
             why_it_matters=(
-                "Eye contact is the fastest way to build trust on camera. Low "
-                "contact makes even strong content feel uncertain."
+                "Looking near the camera helps the practice feel more connected "
+                "and makes it easier to review your delivery."
             ),
             fix=(
                 "Place a sticky note next to your camera lens and treat it as a "
-                "single audience member you're speaking to."
+                "single point to return to between thoughts."
             ),
         ))
 
@@ -207,18 +208,18 @@ def _pick_strengths(
 ) -> list[str]:
     strengths: list[str] = []
     if filler_rate <= FILLER_RATE_LOW and word_count > 30:
-        strengths.append("Filler use was notably low — your speech sounded clean.")
+        strengths.append("Filler use stayed low, which kept the message easy to follow.")
     if 130 <= avg_wpm <= 160:
-        strengths.append(f"Pace stayed in the sweet spot ({avg_wpm:.0f} WPM).")
+        strengths.append(f"Pace stayed in a comfortable range ({avg_wpm:.0f} WPM).")
     if pauses_per_min >= 1.0:
-        strengths.append("Used pauses deliberately — that gives your ideas room to land.")
+        strengths.append("You used pauses regularly, which supports breath control.")
     if eye_contact is not None and eye_contact >= EYE_CONTACT_STRONG:
         strengths.append(f"Eye contact was strong ({eye_contact * 100:.0f}%).")
     if duration_min >= 2 and word_count >= 60:
-        strengths.append("Sustained continuous speech without bailing — that's the hardest part.")
+        strengths.append("You sustained continuous speech for the full practice window.")
 
     if not strengths:
-        strengths.append("You showed up and ran a full session — that's the rep that compounds.")
+        strengths.append("You completed a practice rep, which gives you something concrete to improve.")
     return strengths[:3]
 
 
@@ -230,18 +231,22 @@ def _overall_summary(
     priority_area: FocusArea,
 ) -> str:
     area_phrase = {
-        "fillers": "filler use is the highest-leverage thing to clean up",
-        "pace": "your pace is the biggest lever for the next session",
-        "pauses": "adding deliberate pauses will be the biggest unlock",
-        "clarity": "clarity is the main thing to sharpen",
-        "structure": "structure is what to focus on next",
-        "delivery": "delivery is what to push on",
-        "eye_contact": "eye contact is the most visible improvement to make",
+        "fillers": "the most useful next step is replacing fillers with short pauses",
+        "pace": "the most useful next step is practicing a steadier pace",
+        "pauses": "the most useful next step is adding deliberate pauses",
+        "clarity": "the most useful next step is making the main point easier to follow",
+        "structure": "the most useful next step is organizing the answer into clear beats",
+        "delivery": "the most useful next step is polishing how key sentences land",
+        "eye_contact": "the most useful next step is returning your eyes toward the camera",
     }[priority_area]
+    if word_count == 0:
+        return (
+            "This session did not capture enough speech for detailed feedback. "
+            f"For the next run, {area_phrase}."
+        )
     return (
         f"You delivered {word_count} words over {duration_min:.1f} minutes "
-        f"at {avg_wpm:.0f} WPM. Right now {area_phrase} — see the focus below "
-        f"for the specific move."
+        f"at {avg_wpm:.0f} WPM. Right now, {area_phrase}."
     )
 
 
@@ -253,27 +258,27 @@ def _drill_for(area: FocusArea) -> str:
         ),
         "pace": (
             "Read a paragraph aloud at three speeds: 100 WPM, 140 WPM, 180 WPM. "
-            "Notice how 140 feels — that's your target."
+            "Notice how 140 feels, then use that as your target."
         ),
         "pauses": (
             "Take your talk script and mark exactly 3 spots with [PAUSE]. "
-            "Re-record and hold each one for two full Mississippi-counts."
+            "Re-record and hold each one for two full seconds."
         ),
         "clarity": (
             "Write the single sentence that captures your point. Open with it. "
             "Close with it. Practice 3 takes."
         ),
         "structure": (
-            "Outline your next take as Point → Evidence → Implication. Three "
+            "Outline your next take as Point, Evidence, Implication. Three "
             "beats, nothing else."
         ),
         "delivery": (
             "Record one take focused only on landing the first and last sentence. "
-            "The middle takes care of itself."
+            "Keep the middle simple and steady."
         ),
         "eye_contact": (
             "Tape a small mark right above your camera. Practice 90 seconds "
-            "where your eyes never drift more than 6 inches from it."
+            "where your eyes return to that mark between thoughts."
         ),
     }[area]
 
@@ -281,14 +286,14 @@ def _drill_for(area: FocusArea) -> str:
 def _default_focus() -> Focus:
     return Focus(
         area="delivery",
-        observation="Metrics look reasonable — no single area is screaming for attention.",
+        observation="The core metrics look steady, so no single area needs urgent attention.",
         why_it_matters=(
             "When the basics are in place, the next gain comes from polish: "
             "landing your opener, your closer, and the transitions in between."
         ),
         fix=(
-            "Pick the one sentence in your talk you most want the audience to "
-            "remember and rehearse just that line three different ways."
+            "Pick the one sentence in your talk you most want someone to remember "
+            "and rehearse just that line three different ways."
         ),
     )
 
@@ -303,8 +308,8 @@ def _excerpt_around(transcript: str, target: str) -> str | None:
     start = max(0, index - 40)
     end = min(len(transcript), index + len(target) + 40)
     excerpt = transcript[start:end].strip()
-    prefix = "…" if start > 0 else ""
-    suffix = "…" if end < len(transcript) else ""
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(transcript) else ""
     return f"{prefix}{excerpt}{suffix}"
 
 

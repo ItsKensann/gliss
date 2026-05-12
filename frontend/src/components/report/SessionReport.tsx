@@ -99,7 +99,18 @@ function CoachFeedback({
         </section>
       )
     }
-    return null
+    return (
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-400">
+          Coach feedback
+        </h2>
+        <div className="bg-gray-800/40 rounded-xl px-5 py-4 ring-1 ring-white/5">
+          <p className="text-sm text-gray-400">
+            Coach feedback is not available for this session.
+          </p>
+        </div>
+      </section>
+    )
   }
 
   return (
