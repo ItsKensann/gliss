@@ -4,7 +4,9 @@ import { useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { useSession } from "@/hooks/useSession"
 import { useFaceTracking } from "@/hooks/useFaceTracking"
+import { useFinalizationProgress } from "@/hooks/useFinalizationProgress"
 import { LiveFeedback } from "./LiveFeedback"
+import { FinalizationProgress } from "./FinalizationProgress"
 
 function MetricPill({ label, value, highlight }: { label: string; value: string; highlight: boolean }) {
   return (
@@ -44,11 +46,20 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
     phase,
     countdown,
     remainingMs,
+    finalizationStartedAt,
+    recordingDurationMs,
     streamRef,
     startSession,
     stopSession,
     sendFaceMetrics,
   } = useSession()
+
+  const finalizationProgress = useFinalizationProgress({
+    startedAt: phase === "wrapping" ? finalizationStartedAt : null,
+    recordingDurationMs,
+    gotPreliminary: false,
+    gotFinalized: false,
+  })
 
   const { eyeContactScore, headStability, faceVisible } = useFaceTracking(
     videoRef,
@@ -240,22 +251,15 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 backdrop-blur-sm"
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/55 backdrop-blur-sm px-8"
             >
-              <span className="text-white/70 text-sm font-medium mb-3 tracking-wide uppercase">
-                Wrapping up
-              </span>
-              <div className="flex gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <motion.span
-                    key={i}
-                    className="w-2.5 h-2.5 rounded-full bg-amber-300"
-                    animate={{ opacity: [0.3, 1, 0.3] }}
-                    transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-                  />
-                ))}
-              </div>
-              <p className="text-white/50 text-xs mt-4">Capturing your final words…</p>
+              <FinalizationProgress
+                percent={finalizationProgress.percent}
+                stage={finalizationProgress.stage}
+                slow={finalizationProgress.slow}
+                variant="overlay"
+              />
+              <p className="text-white/50 text-xs">Capturing your final words…</p>
             </motion.div>
           )}
         </AnimatePresence>

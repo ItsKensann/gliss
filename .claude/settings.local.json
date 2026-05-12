@@ -25,7 +25,10 @@
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 30)",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 20)",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -Last 10)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(xargs grep -l \"segments\")",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 40)",
+      "PowerShell(..\\\\backend\\\\.venv\\\\Scripts\\\\python.exe -c \"import sys; sys.path.insert\\(0, '..\\\\backend'\\); from app.core import progress; from app.models.session import FinalizationProgress; from app.api.routes import report, session; print\\('imports ok'\\)\")"
     ]
   }
 }

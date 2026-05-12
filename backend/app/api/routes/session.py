@@ -7,6 +7,7 @@ from time import perf_counter
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
+from app.core import progress
 from app.models.session import AnalysisResult, FaceMetrics, Pause, SessionReport
 from app.services.audio_analysis import (
     AudioAnalysisService,
@@ -374,6 +375,7 @@ async def session_websocket(
         pass
     finally:
         finalization_started = perf_counter()
+        progress.update(session_id, "analysis_shutdown", 0.0)
         # Signal the analysis loop and wait for it to finish its current work.
         # This avoids cancelling an in-flight Whisper call.
         stop_event.set()
@@ -414,6 +416,7 @@ async def session_websocket(
             # preliminary save exists purely to unblock the frontend's poll,
             # and the metrics it sees aren't yet authoritative.
             if is_finalized:
+                progress.update(session_id, "feedback_generation", 92.0)
                 feedback_started = perf_counter()
                 try:
                     feedback = await feedback_provider.generate(report)
@@ -430,6 +433,7 @@ async def session_websocket(
                         "Feedback provider failed for session %s; saving without it",
                         session_id,
                     )
+                progress.update(session_id, "finalized_save", 97.0)
             save_report(report)
             logger.info(
                 "Session %s report save complete: finalized=%s save_ms=%.1f stats=%s",
@@ -444,6 +448,7 @@ async def session_websocket(
         # audio that arrived during the in-flight Whisper run plus the wrap-up
         # buffer; we re-save when it's done, and the frontend re-fetches because
         # is_finalized=False.
+        progress.update(session_id, "preliminary_save", 10.0)
         await _save(is_finalized=False)
         logger.info(
             "Session %s preliminary save — %d chunks (running final cycle)",
@@ -451,6 +456,7 @@ async def session_websocket(
         )
 
         try:
+            progress.update(session_id, "live_buffer_pass", 18.0)
             final_buffer_started = perf_counter()
             buffer_words_before = len(full_transcript.split())
             buffer_chunks_before = len(chunks)
@@ -478,10 +484,23 @@ async def session_websocket(
             logger.exception("Final transcription cycle failed; saving as-is")
 
         try:
+            progress.update(session_id, "full_pass_whisper", 25.0)
             full_pass_started = perf_counter()
+
+            # Called from the Whisper executor thread once per segment yield.
+            # 25.0 → 80.0 maps Whisper's local fraction onto the global budget.
+            def _whisper_progress(fraction: float) -> None:
+                progress.update(
+                    session_id,
+                    "full_pass_whisper",
+                    25.0 + fraction * (80.0 - 25.0),
+                )
+
             final_result = await loop.run_in_executor(
                 _whisper_executor,
-                transcription.transcribe_full_session,
+                lambda: transcription.transcribe_full_session(
+                    progress_callback=_whisper_progress,
+                ),
             )
             logger.info(
                 "Session %s full-session Whisper pass complete: elapsed_ms=%.1f audio_duration=%.2fs words=%d segments=%d",
@@ -493,6 +512,7 @@ async def session_websocket(
             )
             final_text = final_result["text"].strip()
             if final_text:
+                progress.update(session_id, "pause_detection", 82.0)
                 pause_started = perf_counter()
                 audio_pauses = transcription.detect_full_session_pauses()
                 logger.info(
@@ -510,6 +530,7 @@ async def session_websocket(
                     final_result.get("segments", []),
                     float(final_result.get("audio_duration") or 0.0),
                 )
+                progress.update(session_id, "chunk_rebuild", 87.0)
                 rebuild_started = perf_counter()
                 final_chunks = _build_final_report_chunks(
                     final_result,
@@ -535,6 +556,7 @@ async def session_websocket(
             logger.exception("Full-session transcription failed; keeping live chunks")
 
         await _save(is_finalized=True)
+        progress.complete(session_id)
         logger.info(
             "Session %s finalized — %d chunks, %.0fs",
             session_id, len(chunks),

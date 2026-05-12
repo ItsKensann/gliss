@@ -17,6 +17,17 @@ interface ExtendedSessionState extends SessionState {
   countdown: number
   durationSec: number | null
   remainingMs: number | null
+  finalizationStartedAt: number | null
+  recordingDurationMs: number | null
+}
+
+export function finalizationStorageKey(sessionId: string): string {
+  return `gliss:finalization:${sessionId}`
+}
+
+export interface FinalizationHandoff {
+  startedAt: number
+  recordingDurationMs: number | null
 }
 
 interface StartOptions {
@@ -37,6 +48,8 @@ export function useSession() {
     countdown: 0,
     durationSec: null,
     remainingMs: null,
+    finalizationStartedAt: null,
+    recordingDurationMs: null,
   })
 
   const wsRef = useRef<GlissWebSocket | null>(null)
@@ -103,6 +116,24 @@ export function useSession() {
     // user intent, not to whenever Whisper finishes the final cycle.
     wsRef.current?.sendControl("stop")
 
+    const recordedStart = recordingStartedAtRef.current
+    const recordingDurationMs =
+      recordedStart !== null ? performance.now() - recordedStart : null
+    const finalizationStartedAt = Date.now()
+
+    if (sessionId && typeof window !== "undefined") {
+      const handoff: FinalizationHandoff = {
+        startedAt: finalizationStartedAt,
+        recordingDurationMs,
+      }
+      try {
+        sessionStorage.setItem(finalizationStorageKey(sessionId), JSON.stringify(handoff))
+      } catch {
+        // sessionStorage can throw in private modes; safe to ignore — the
+        // report page will fall back to fresh timing.
+      }
+    }
+
     // Keep audio + WS alive for WRAP_BUFFER_MS so trailing words make it into
     // the backend's final transcription cycle.
     wrappingRef.current = true
@@ -111,6 +142,8 @@ export function useSession() {
       phase: "wrapping",
       isRecording: false,
       remainingMs: null,
+      finalizationStartedAt,
+      recordingDurationMs,
     }))
     wrapTimeoutRef.current = setTimeout(() => {
       wrapTimeoutRef.current = null

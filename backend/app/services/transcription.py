@@ -1,6 +1,7 @@
 import logging
 import struct
 from threading import Lock
+from typing import Callable, Optional
 
 import numpy as np
 from faster_whisper import WhisperModel
@@ -8,6 +9,8 @@ from faster_whisper import WhisperModel
 from app.core.config import settings
 from app.models.session import Pause
 from app.services.audio_analysis import detect_audio_pauses
+
+ProgressCallback = Callable[[float], None]
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +114,7 @@ class TranscriptionService:
     def transcribe_full_session(
         self,
         min_seconds: float = FINAL_MIN_TRANSCRIBE_SECONDS,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> dict:
         with self._lock:
             if not self._full_audio_chunks:
@@ -128,6 +132,7 @@ class TranscriptionService:
             condition_on_previous_text=True,
             patience=1.2,
             hallucination_silence_threshold=2.0,
+            progress_callback=progress_callback,
         )
         if result["text"]:
             logger.info("Final session transcript: %r", result["text"][:120])
@@ -157,6 +162,7 @@ class TranscriptionService:
         condition_on_previous_text: bool,
         patience: float = 1.0,
         hallucination_silence_threshold: float | None = None,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> dict:
         audio_duration = len(audio) / TARGET_SR
         segments_iter, _ = self.model.transcribe(
@@ -184,6 +190,11 @@ class TranscriptionService:
             ]
             segments.append({"start": seg.start, "end": seg.end, "text": seg.text, "words": words})
             text_parts.append(seg.text)
+            if progress_callback is not None and audio_duration > 0:
+                try:
+                    progress_callback(min(1.0, max(0.0, seg.end / audio_duration)))
+                except Exception:
+                    logger.exception("progress_callback raised; ignoring")
 
         return {
             "text": " ".join(text_parts).strip(),

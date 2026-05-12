@@ -1,5 +1,25 @@
+from datetime import datetime
 from pydantic import BaseModel, Field
 from typing import Literal, Optional
+
+
+FinalizationStage = Literal[
+    "analysis_shutdown",
+    "preliminary_save",
+    "live_buffer_pass",
+    "full_pass_whisper",
+    "pause_detection",
+    "chunk_rebuild",
+    "feedback_generation",
+    "finalized_save",
+    "done",
+]
+
+
+class FinalizationProgress(BaseModel):
+    stage: FinalizationStage
+    percent: float
+    updated_at: datetime
 
 
 class FillerWord(BaseModel):
