@@ -42,21 +42,6 @@ export function LiveFeedback({ analysis, eyeContactScore, faceVisible = true }: 
           </motion.div>
         ))}
       </AnimatePresence>
-
-      <AnimatePresence>
-        {analysis?.ai_feedback && (
-          <motion.div
-            key={analysis.ai_feedback}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="px-4 py-3 rounded-xl border bg-purple-500/20 border-purple-400/40 text-purple-200 text-sm"
-          >
-            <span className="font-semibold">Coach: </span>
-            {analysis.ai_feedback}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

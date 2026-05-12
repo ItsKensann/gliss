@@ -77,18 +77,20 @@ frontend/
 - The analysis loop uses a **stop event**, not `task.cancel()`, so an in-flight Whisper run finishes cleanly before shutdown.
 
 ### Mutable state in nested async functions
-The session WebSocket handler uses 1-element list refs (`face_metrics_ref`, `ai_enabled_ref`) instead of `nonlocal` for state that the receive loop updates and `run_analysis` reads. This avoids Python's `nonlocal` quirks for mutable values across nested closures.
+The session WebSocket handler uses 1-element list refs (e.g. `prompt_ref`, `target_duration_ref`) instead of `nonlocal` for state that the receive loop updates and `run_analysis` reads. This avoids Python's `nonlocal` quirks for mutable values across nested closures.
 
 ### WebSocket protocol
 - Audio: **binary** frames. First 4 bytes = uint32 LE source sample rate, remainder = float32 LE mono PCM chunks captured by the browser.
 - The AudioWorklet downmixes all input channels to mono before sending audio.
 - Backend resamples incoming audio to 16kHz and stores it in both the live chunk buffer and the full-session buffer.
-- Control: **JSON text** frames with a `type` discriminator: `"metrics"` (eye contact), `"config"` (`ai_enabled`).
+- Control: **JSON text** frames with a `type` discriminator: `"metrics"` (eye contact), `"config"` (`prompt`, `target_duration_seconds`).
 - Session ID is passed as a query string: `?session_id=<uuid>`.
 
-### AI feedback toggle (dev mode)
-- Default is **OFF** on both backend (`ai_enabled_ref = [False]`) and frontend (`aiEnabled: false` in `useSession`) to avoid burning Anthropic credits during development.
-- The toggle pill in `Recorder.tsx` sends a `{type:"config", ai_enabled:bool}` message.
+### Post-session structured feedback
+- No LLM runs during the session. Live feedback is purely heuristic (`ImmediateFeedback`).
+- After the final Whisper pass, the report is handed to a `FeedbackProvider` (see `services/feedback.py`) which returns a `StructuredFeedback` (overall, strengths, priority + secondary focuses, drill, encouragement).
+- Provider is chosen via `settings.feedback_provider`. Currently only `mock` is wired — it derives feedback from real heuristic metrics. `claude` / `ollama` providers will be added later behind the same `FeedbackProvider` protocol.
+- The preliminary save (`is_finalized=False`) leaves `structured_feedback=None`; the report UI shows a "generating…" placeholder until the finalized save arrives.
 
 ### Pydantic v2
 - All cross-boundary data (WebSocket messages, REST responses, persisted JSON) is a Pydantic model.

@@ -14,7 +14,7 @@ from app.services.audio_analysis import (
     localize_fillers,
     localize_pauses,
 )
-from app.services.feedback import get_ai_feedback, get_coherence_score
+from app.services.feedback import get_feedback_provider
 from app.services.session_store import build_report, save_report
 from app.services.transcription import MIN_TRANSCRIBE_SECONDS, TranscriptionService
 
@@ -186,8 +186,6 @@ def _build_final_report_chunks(
             pauses=pauses,
             breath_advice=breath_advice,
             immediate_feedback=immediate_feedback,
-            coherence_score=None,
-            ai_feedback="",
             start_offset_seconds=round(start_offset, 2),
             end_offset_seconds=round(end_offset, 2),
             avg_eye_contact=eye_snapshot,
@@ -206,13 +204,13 @@ async def _run_transcription_cycle(
     full_transcript: str,
     chunks: list[AnalysisResult],
     loop: asyncio.AbstractEventLoop,
-    with_ai: bool,
     anchor_ref: list,  # [datetime | None] — anchor for chunk offsets; first audio time
     min_seconds: float | None = None,
 ) -> str:
     """
-    Transcribe buffered audio, run local analysis, optionally call Claude,
-    append to chunks, and send to the client.
+    Transcribe buffered audio, run local analysis, append to chunks, and send
+    to the client. LLM-derived coaching is generated once post-session by the
+    configured FeedbackProvider; nothing here calls a model.
     Returns the updated full_transcript string.
     """
     transcribe = (
@@ -231,9 +229,6 @@ async def _run_transcription_cycle(
     fillers, speed, pauses, immediate_feedback = analysis.analyze_transcript(result)
     breath_advice = analysis.suggest_breath_control(speed, pauses)
 
-    ai_fb: str = ""
-    coherence: float | None = None
-
     audio_duration = float(result.get("audio_duration") or 0.0)
     anchor = anchor_ref[0] or cycle_started_at
     end_offset = (cycle_started_at - anchor).total_seconds()
@@ -246,18 +241,6 @@ async def _run_transcription_cycle(
         chunk_ended_at,
     )
 
-    if with_ai:
-        try:
-            ai_fb, coherence = await asyncio.gather(
-                get_ai_feedback(
-                    chunk_text, len(fillers), speed.current_wpm,
-                    eye_snapshot,
-                ),
-                get_coherence_score(full_transcript[-500:]),
-            )
-        except Exception as e:
-            logger.warning("AI feedback error (skipping for this chunk): %s", e)
-
     # Store the average face metrics for the same window as this transcript chunk.
     output = AnalysisResult(
         transcript=chunk_text,
@@ -266,8 +249,6 @@ async def _run_transcription_cycle(
         pauses=pauses,
         breath_advice=breath_advice,
         immediate_feedback=immediate_feedback,
-        coherence_score=coherence,
-        ai_feedback=ai_fb,
         start_offset_seconds=round(start_offset, 2),
         end_offset_seconds=round(end_offset, 2),
         avg_eye_contact=eye_snapshot,
@@ -293,8 +274,8 @@ async def session_websocket(
 
     transcription = TranscriptionService()
     analysis = AudioAnalysisService()
+    feedback_provider = get_feedback_provider()
     face_metric_samples: list[tuple[datetime, FaceMetrics]] = []
-    ai_enabled_ref = [False]  # off by default during dev — client must opt in via "config" message
     prompt_ref: list[str | None] = [None]
     target_duration_ref: list[float | None] = [None]
     # Stamped on first audio frame received and on the user's "stop" control
@@ -329,7 +310,6 @@ async def session_websocket(
             full_transcript=full_transcript,
             chunks=chunks,
             loop=loop,
-            with_ai=ai_enabled_ref[0],
             anchor_ref=first_audio_at_ref,
         )
 
@@ -348,7 +328,6 @@ async def session_websocket(
                 full_transcript=full_transcript,
                 chunks=chunks,
                 loop=loop,
-                with_ai=ai_enabled_ref[0],
                 anchor_ref=first_audio_at_ref,
             )
 
@@ -376,9 +355,6 @@ async def session_websocket(
                         )
                         face_metric_samples.append((received_at, face_metrics))
                     elif msg.get("type") == "config":
-                        if "ai_enabled" in msg:
-                            ai_enabled_ref[0] = bool(msg["ai_enabled"])
-                            logger.info("AI feedback %s", "enabled" if ai_enabled_ref[0] else "disabled")
                         if "prompt" in msg:
                             prompt_ref[0] = msg["prompt"] or None
                         if "target_duration_seconds" in msg:
@@ -421,7 +397,7 @@ async def session_websocket(
         report_ended_at = recording_end_at_ref[0] or datetime.now(timezone.utc)
         pace_events = []
 
-        def _save(is_finalized: bool) -> None:
+        async def _save(is_finalized: bool) -> None:
             save_started = perf_counter()
             report = build_report(
                 session_id,
@@ -434,6 +410,26 @@ async def session_websocket(
                 is_finalized=is_finalized,
                 pace_events=pace_events,
             )
+            # Only generate structured feedback on the finalized save — the
+            # preliminary save exists purely to unblock the frontend's poll,
+            # and the metrics it sees aren't yet authoritative.
+            if is_finalized:
+                feedback_started = perf_counter()
+                try:
+                    feedback = await feedback_provider.generate(report)
+                    if feedback is not None:
+                        report.structured_feedback = feedback
+                        logger.info(
+                            "Session %s feedback generated: provider=%s elapsed_ms=%.1f",
+                            session_id,
+                            feedback.generated_by,
+                            (perf_counter() - feedback_started) * 1000,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Feedback provider failed for session %s; saving without it",
+                        session_id,
+                    )
             save_report(report)
             logger.info(
                 "Session %s report save complete: finalized=%s save_ms=%.1f stats=%s",
@@ -448,7 +444,7 @@ async def session_websocket(
         # audio that arrived during the in-flight Whisper run plus the wrap-up
         # buffer; we re-save when it's done, and the frontend re-fetches because
         # is_finalized=False.
-        _save(is_finalized=False)
+        await _save(is_finalized=False)
         logger.info(
             "Session %s preliminary save — %d chunks (running final cycle)",
             session_id, len(chunks),
@@ -466,7 +462,6 @@ async def session_websocket(
                 full_transcript=full_transcript,
                 chunks=chunks,
                 loop=loop,
-                with_ai=False,  # Session is over; skip the Claude round-trip
                 anchor_ref=first_audio_at_ref,
                 min_seconds=1.0,
             )
@@ -511,12 +506,6 @@ async def session_websocket(
                     session_id,
                     [p.model_dump() for p in audio_pauses],
                 )
-                live_ai_feedback = [chunk.ai_feedback for chunk in chunks if chunk.ai_feedback]
-                live_coherence_scores = [
-                    chunk.coherence_score
-                    for chunk in chunks
-                    if chunk.coherence_score is not None
-                ]
                 pace_events = detect_pace_events(
                     final_result.get("segments", []),
                     float(final_result.get("audio_duration") or 0.0),
@@ -535,10 +524,6 @@ async def session_websocket(
                     len(final_chunks),
                     sum(len(chunk.filler_words) for chunk in final_chunks),
                 )
-                for final_chunk, note in zip(final_chunks, live_ai_feedback):
-                    final_chunk.ai_feedback = note
-                for final_chunk, score in zip(final_chunks, live_coherence_scores):
-                    final_chunk.coherence_score = score
                 full_transcript = final_text
                 if final_chunks:
                     chunks = final_chunks
@@ -549,7 +534,7 @@ async def session_websocket(
         except Exception:
             logger.exception("Full-session transcription failed; keeping live chunks")
 
-        _save(is_finalized=True)
+        await _save(is_finalized=True)
         logger.info(
             "Session %s finalized — %d chunks, %.0fs",
             session_id, len(chunks),

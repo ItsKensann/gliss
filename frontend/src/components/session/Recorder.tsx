@@ -41,14 +41,12 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
     isConnected,
     latestAnalysis,
     transcript,
-    aiEnabled,
     phase,
     countdown,
     remainingMs,
     streamRef,
     startSession,
     stopSession,
-    toggleAI,
     sendFaceMetrics,
   } = useSession()
 
@@ -189,13 +187,6 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
                   value={String(latestAnalysis.filler_words.length)}
                   highlight={latestAnalysis.filler_words.length > 3}
                 />
-                {latestAnalysis.coherence_score !== undefined && (
-                  <MetricPill
-                    label="Focus"
-                    value={`${Math.round(latestAnalysis.coherence_score * 100)}%`}
-                    highlight={latestAnalysis.coherence_score < 0.5}
-                  />
-                )}
               </>
             )}
             {withCamera && (
@@ -286,21 +277,6 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
       >
         {buttonLabel}
       </button>
-
-      {/* AI toggle — visible while recording */}
-      {isRecording && (
-        <button
-          onClick={() => toggleAI(!aiEnabled)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-            aiEnabled
-              ? "bg-purple-500/20 border-purple-400/40 text-purple-300 hover:bg-purple-500/30"
-              : "bg-gray-800/60 border-gray-600/40 text-gray-500 hover:bg-gray-700/60"
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${aiEnabled ? "bg-purple-400" : "bg-gray-600"}`} />
-          AI Feedback {aiEnabled ? "ON" : "OFF"}
-        </button>
-      )}
 
       {/* Rolling transcript */}
       {transcript && (

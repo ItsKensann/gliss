@@ -57,8 +57,6 @@ class AnalysisResult(BaseModel):
     pauses: list[Pause]
     breath_advice: Optional[BreathAdvice] = None
     immediate_feedback: list[ImmediateFeedback]
-    coherence_score: Optional[float] = None
-    ai_feedback: Optional[str] = None
     start_offset_seconds: float = 0.0
     end_offset_seconds: float = 0.0
     # Snapshot of the latest face metrics at the time this chunk was built.
@@ -74,10 +72,34 @@ class SessionSummary(BaseModel):
     peak_wpm: float
     filler_counts: dict[str, int]       # word → total occurrences
     total_pauses: int
-    avg_coherence: float
-    coach_notes: list[str]              # ai_feedback messages, deduplicated
     avg_eye_contact: Optional[float] = None
     avg_head_stability: Optional[float] = None
+
+
+FocusArea = Literal[
+    "fillers", "pace", "pauses", "clarity", "structure", "delivery", "eye_contact"
+]
+
+
+class Focus(BaseModel):
+    """One concrete thing to work on, grounded in a metric or excerpt."""
+    area: FocusArea
+    observation: str            # what the LLM noticed
+    why_it_matters: str         # why this hurts the talk
+    fix: str                    # one specific action
+    excerpt: Optional[str] = None  # transcript quote where it showed up
+
+
+class StructuredFeedback(BaseModel):
+    """End-of-session coaching output. One per finalized report."""
+    overall: str                        # 2-3 sentence summary
+    strengths: list[str]                # 2-3 concrete strengths
+    priority_focus: Focus               # the ONE thing to work on next
+    secondary_focuses: list[Focus]      # 1-2 more, lower priority
+    drill_suggestion: str               # one concrete practice exercise
+    encouragement: str                  # short, personalized close
+    feedback_version: str = "v1"        # bump to re-run on old sessions
+    generated_by: str                   # "mock", "claude-sonnet-4-6", "ollama:qwen2.5:7b", etc.
 
 
 class SessionListItem(BaseModel):
@@ -106,3 +128,7 @@ class SessionReport(BaseModel):
     # immediately, then again with is_finalized=True after the trailing
     # cycle completes. Frontend keeps polling until True.
     is_finalized: bool = True
+    # Populated on the finalized save by the configured FeedbackProvider.
+    # Preliminary saves leave this None; UI shows a "generating feedback…"
+    # placeholder until is_finalized=True arrives.
+    structured_feedback: Optional[StructuredFeedback] = None

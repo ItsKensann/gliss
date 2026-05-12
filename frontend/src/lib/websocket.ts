@@ -66,7 +66,6 @@ export class GlissWebSocket {
   }
 
   sendConfig(config: {
-    ai_enabled?: boolean
     prompt?: string | null
     target_duration_seconds?: number | null
   }): void {

@@ -25,12 +25,10 @@ def build_report(
 ) -> SessionReport:
     filler_counts: dict[str, int] = defaultdict(int)
     wpm_values: list[float] = []
-    coherence_values: list[float] = []
     eye_total = 0.0
     eye_weight = 0.0
     head_total = 0.0
     head_weight = 0.0
-    coach_notes: list[str] = []
     total_pauses = 0
 
     for chunk in chunks:
@@ -38,8 +36,6 @@ def build_report(
             filler_counts[fw.word] += 1
         wpm_values.append(chunk.speed.current_wpm)
         total_pauses += len(chunk.pauses)
-        if chunk.coherence_score is not None:
-            coherence_values.append(chunk.coherence_score)
         chunk_duration = max(0.0, chunk.end_offset_seconds - chunk.start_offset_seconds)
         metric_weight = chunk_duration or 1.0
         if chunk.avg_eye_contact is not None:
@@ -48,8 +44,6 @@ def build_report(
         if chunk.avg_head_stability is not None:
             head_total += chunk.avg_head_stability * metric_weight
             head_weight += metric_weight
-        if chunk.ai_feedback and chunk.ai_feedback not in coach_notes:
-            coach_notes.append(chunk.ai_feedback)
 
     duration = (ended_at - started_at).total_seconds()
     total_words = len(full_transcript.split())
@@ -60,8 +54,6 @@ def build_report(
         peak_wpm=round(max(wpm_values), 1) if wpm_values else 0.0,
         filler_counts=dict(sorted(filler_counts.items(), key=lambda x: -x[1])),
         total_pauses=total_pauses,
-        avg_coherence=round(sum(coherence_values) / len(coherence_values), 2) if coherence_values else 1.0,
-        coach_notes=coach_notes[:5],  # top 5 unique notes
         avg_eye_contact=round(eye_total / eye_weight, 3) if eye_weight else None,
         avg_head_stability=round(head_total / head_weight, 3) if head_weight else None,
     )

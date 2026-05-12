@@ -46,12 +46,38 @@ export interface AnalysisResult {
   pauses: Pause[]
   breath_advice?: BreathAdvice
   immediate_feedback: ImmediateFeedback[]
-  coherence_score?: number
-  ai_feedback?: string
   start_offset_seconds?: number
   end_offset_seconds?: number
   avg_eye_contact?: number | null
   avg_head_stability?: number | null
+}
+
+export type FocusArea =
+  | "fillers"
+  | "pace"
+  | "pauses"
+  | "clarity"
+  | "structure"
+  | "delivery"
+  | "eye_contact"
+
+export interface Focus {
+  area: FocusArea
+  observation: string
+  why_it_matters: string
+  fix: string
+  excerpt?: string | null
+}
+
+export interface StructuredFeedback {
+  overall: string
+  strengths: string[]
+  priority_focus: Focus
+  secondary_focuses: Focus[]
+  drill_suggestion: string
+  encouragement: string
+  feedback_version: string
+  generated_by: string
 }
 
 export interface FaceMetrics {
@@ -76,8 +102,6 @@ export interface SessionSummary {
   peak_wpm: number
   filler_counts: Record<string, number>
   total_pauses: number
-  avg_coherence: number
-  coach_notes: string[]
   avg_eye_contact?: number | null
   avg_head_stability?: number | null
 }
@@ -102,4 +126,5 @@ export interface SessionReportData {
   prompt?: string
   target_duration_seconds?: number
   is_finalized?: boolean
+  structured_feedback?: StructuredFeedback | null
 }

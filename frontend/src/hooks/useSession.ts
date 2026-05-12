@@ -13,7 +13,6 @@ const WRAP_BUFFER_MS = 2000
 export type SessionPhase = "idle" | "preparing" | "countdown" | "recording" | "wrapping"
 
 interface ExtendedSessionState extends SessionState {
-  aiEnabled: boolean
   phase: SessionPhase
   countdown: number
   durationSec: number | null
@@ -34,7 +33,6 @@ export function useSession() {
     latestAnalysis: null,
     transcript: "",
     sessionId: null,
-    aiEnabled: false,
     phase: "idle",
     countdown: 0,
     durationSec: null,
@@ -210,11 +208,6 @@ export function useSession() {
     }
   }, [clearTimer])
 
-  const toggleAI = useCallback((enabled: boolean) => {
-    wsRef.current?.sendConfig({ ai_enabled: enabled })
-    setState((prev) => ({ ...prev, aiEnabled: enabled }))
-  }, [])
-
   const sendFaceMetrics = useCallback(
     (eyeContactScore: number, headStability: number, faceVisible: boolean) => {
       wsRef.current?.sendMetrics({
@@ -227,5 +220,5 @@ export function useSession() {
     []
   )
 
-  return { ...state, streamError, streamRef, startSession, stopSession, toggleAI, sendFaceMetrics }
+  return { ...state, streamError, streamRef, startSession, stopSession, sendFaceMetrics }
 }
