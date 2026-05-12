@@ -114,7 +114,7 @@ export function useSession() {
     }))
     wrapTimeoutRef.current = setTimeout(() => {
       wrapTimeoutRef.current = null
-      finalizeStop(sessionId, true)
+      finalizeStop(sessionId, Boolean(sessionId))
     }, WRAP_BUFFER_MS)
   }, [state.phase, clearTimer, finalizeStop])
 
@@ -162,7 +162,11 @@ export function useSession() {
       )
     } catch {
       cancelledRef.current = true
-      setState((prev) => ({ ...prev, phase: "idle", sessionId: null }))
+      setState((prev) => ({
+        ...prev,
+        phase: "idle",
+        sessionId: null,
+      }))
       return
     }
 

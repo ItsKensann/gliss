@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from app.models.session import SessionListItem, SessionReport
 from app.services.session_store import (
@@ -12,7 +12,8 @@ router = APIRouter()
 
 
 @router.get("/report/{session_id}", response_model=SessionReport)
-async def get_report(session_id: str):
+async def get_report(session_id: str, response: Response):
+    response.headers["Cache-Control"] = "no-store"
     report = load_report(session_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Session not found")

@@ -1,12 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { SessionReport } from "@/components/report/SessionReport"
 import type { SessionReportData } from "@/lib/types"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+const REPORT_POLL_INTERVAL_MS = 1000
+const SLOW_REPORT_ATTEMPTS = 20
+const MAX_REPORT_FAILURES = 5
 
 function reportDebugStats(report: SessionReportData) {
   const fillerCounts = report.summary.filler_counts
@@ -27,6 +30,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<SessionReportData | null>(null)
   const [error, setError] = useState(false)
   const [attempts, setAttempts] = useState(0)
+  const failuresRef = useRef(0)
 
   useEffect(() => {
     if (!id) return
@@ -39,18 +43,18 @@ export default function ReportPage() {
         timestamp: new Date().toISOString(),
       })
       try {
-        const res = await fetch(`${API}/api/v1/report/${id}`)
+        const res = await fetch(`${API}/api/v1/report/${id}?poll=${Date.now()}`, {
+          cache: "no-store",
+        })
         console.debug("[Gliss report] fetch response", {
           session_id: id,
           attempt: attempts,
           status: res.status,
           elapsed_ms: Math.round(performance.now() - requestedAt),
         })
-        if (res.status === 404 && attempts < 60) {
-          // Backend may still be finishing Whisper + saving — retry for up to 30s.
-          // Tight 500ms interval so the report renders within ~half a second of
-          // the file landing, not up to two seconds later.
-          setTimeout(() => setAttempts((n) => n + 1), 500)
+        if (res.status === 404) {
+          failuresRef.current = 0
+          setTimeout(() => setAttempts((n) => n + 1), REPORT_POLL_INTERVAL_MS)
           return
         }
         if (!res.ok) {
@@ -59,9 +63,15 @@ export default function ReportPage() {
             attempt: attempts,
             status: res.status,
           })
-          setError(true)
+          failuresRef.current += 1
+          if (failuresRef.current >= MAX_REPORT_FAILURES) {
+            setError(true)
+            return
+          }
+          setTimeout(() => setAttempts((n) => n + 1), REPORT_POLL_INTERVAL_MS)
           return
         }
+        failuresRef.current = 0
         const data: SessionReportData = await res.json()
         console.debug("[Gliss report] payload", {
           session_id: id,
@@ -69,22 +79,27 @@ export default function ReportPage() {
           elapsed_ms: Math.round(performance.now() - requestedAt),
           stats: reportDebugStats(data),
         })
-        setReport(data)
         if (data.is_finalized === false) {
           console.debug("[Gliss report] waiting for finalized report", {
             session_id: id,
             attempt: attempts,
           })
-          setTimeout(() => setAttempts((n) => n + 1), 1500)
+          setTimeout(() => setAttempts((n) => n + 1), REPORT_POLL_INTERVAL_MS)
           return
         }
+        setReport(data)
       } catch (error) {
         console.debug("[Gliss report] fetch error", {
           session_id: id,
           attempt: attempts,
           error,
         })
-        setError(true)
+        failuresRef.current += 1
+        if (failuresRef.current >= MAX_REPORT_FAILURES) {
+          setError(true)
+          return
+        }
+        setTimeout(() => setAttempts((n) => n + 1), REPORT_POLL_INTERVAL_MS)
       }
     }
 
@@ -101,7 +116,7 @@ export default function ReportPage() {
   }
 
   if (!report) {
-    const isSlowSave = attempts > 20
+    const isSlowSave = attempts > SLOW_REPORT_ATTEMPTS
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-2">
         <div className="flex items-center gap-3 text-gray-400">

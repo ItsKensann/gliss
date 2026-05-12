@@ -96,6 +96,10 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
   const onButtonClick =
     phase === "idle" ? () => startSession({ durationSec, prompt, withCamera }) : stopSession
   const buttonDisabled = phase === "preparing" || phase === "wrapping"
+  const displayButtonLabel =
+    phase === "wrapping"
+      ? "Wrapping up..."
+      : buttonLabel
 
   const showTimer = phase === "recording" && remainingMs !== null
   const timerTone =
@@ -275,7 +279,7 @@ export function Recorder({ durationSec = null, prompt, withCamera = true }: Reco
             : "bg-indigo-500 hover:bg-indigo-600 text-white"
         }`}
       >
-        {buttonLabel}
+        {displayButtonLabel}
       </button>
 
       {/* Rolling transcript */}
