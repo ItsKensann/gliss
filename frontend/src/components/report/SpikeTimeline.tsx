@@ -14,6 +14,8 @@ interface Marker {
   title: string
   detail: string
   excerpt: string
+  color?: string
+  ring?: string
 }
 
 function formatTime(sec: number): string {
@@ -57,12 +59,22 @@ function buildMarkers(chunks: AnalysisResult[], paceEvents: PaceEvent[]): Marker
     }
 
     for (const pause of chunk.pauses) {
-      if (pause.duration > 4.0) {
+      if (pause.duration >= 2.0 && pause.duration <= 4.0) {
+        markers.push({
+          lane: "pause",
+          timeSec: start + pause.start,
+          title: "Effective pause",
+          detail: `${pause.duration.toFixed(1)}s pause for emphasis or reset`,
+          excerpt,
+          color: "bg-emerald-400",
+          ring: "ring-emerald-300/40",
+        })
+      } else if (pause.duration > 4.0) {
         markers.push({
           lane: "pause",
           timeSec: start + pause.start,
           title: "Long pause",
-          detail: `${pause.duration.toFixed(1)}s of silence`,
+          detail: `${pause.duration.toFixed(1)}s silence may break flow`,
           excerpt,
         })
       }
@@ -128,7 +140,7 @@ export function SpikeTimeline({ chunks, paceEvents, durationSeconds }: Props) {
                     >
                       <button
                         type="button"
-                        className={`block w-3 h-3 min-w-[10px] rounded-full ${meta.color} ring-2 ${meta.ring} hover:scale-125 transition-transform`}
+                        className={`block w-3 h-3 min-w-[10px] rounded-full ${m.color ?? meta.color} ring-2 ${m.ring ?? meta.ring} hover:scale-125 transition-transform`}
                         aria-label={`${m.title} at ${formatTime(m.timeSec)}`}
                       />
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-10">
