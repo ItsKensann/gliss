@@ -11,3 +11,4 @@ pydantic-settings==2.4.0
 python-multipart==0.0.12
 soundfile==0.12.1
 python-dotenv==1.0.1
+ollama==0.4.7

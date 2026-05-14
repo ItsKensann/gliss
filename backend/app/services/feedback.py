@@ -6,8 +6,12 @@ output during development without spending API credits or running a local model.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Protocol
+
+from ollama import AsyncClient, ResponseError
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.models.session import Focus, FocusArea, SessionReport, StructuredFeedback
@@ -98,6 +102,99 @@ class MockFeedbackProvider:
             ),
             feedback_version=FEEDBACK_VERSION,
             generated_by="mock",
+        )
+
+
+_OLLAMA_SYSTEM_PROMPT = (
+    "You are a friendly, specific speech coach. The user just finished a "
+    "practice recording. Produce concise, actionable feedback grounded ONLY "
+    "in the transcript and metrics provided — never invent facts the user "
+    "did not say. Pick ONE priority_focus and 1-2 secondary_focuses from: "
+    "fillers, pace, pauses, clarity, structure, delivery, eye_contact. "
+    "Be encouraging but honest. Quote a short transcript excerpt in a focus "
+    "when it makes the observation concrete; otherwise omit the excerpt."
+)
+
+_OLLAMA_HEURISTIC_REFERENCE = (
+    "Reference thresholds (for calibration, not rigid rules): "
+    "filler rate >4% is high, <1.5% is clean. "
+    "WPM 170+ is fast, <110 is slow, 140-160 is comfortable. "
+    "Pauses/min <0.5 is sparse, 1-2 is balanced. "
+    "Eye contact <60% is low, >=80% is strong."
+)
+
+
+class OllamaFeedbackProvider:
+    """Local-LLM-backed coaching feedback via the Ollama HTTP API.
+
+    Falls back to MockFeedbackProvider on any failure (server down, model
+    not pulled, malformed JSON, schema validation error) so the user always
+    gets some feedback. The fallback result is tagged "mock-fallback" in
+    generated_by so the source is traceable.
+    """
+
+    def __init__(self, base_url: str, model: str) -> None:
+        self._client = AsyncClient(host=base_url)
+        self._model = model
+        self._fallback = MockFeedbackProvider()
+
+    async def generate(self, report: SessionReport) -> StructuredFeedback | None:
+        try:
+            user_msg = self._build_user_message(report)
+            schema = StructuredFeedback.model_json_schema()
+            resp = await self._client.chat(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": _OLLAMA_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                format=schema,
+                options={"temperature": 0.4},
+            )
+            raw = resp["message"]["content"]
+            feedback = StructuredFeedback.model_validate_json(raw)
+            feedback.generated_by = f"ollama:{self._model}"
+            return feedback
+        except (ResponseError, ValidationError, json.JSONDecodeError, OSError) as e:
+            logger.warning(
+                "Ollama feedback failed (%s: %s); falling back to mock",
+                type(e).__name__, e,
+            )
+        except Exception:
+            logger.exception("Unexpected Ollama failure; falling back to mock")
+
+        fallback = await self._fallback.generate(report)
+        if fallback is not None:
+            fallback.generated_by = "mock-fallback"
+        return fallback
+
+    def _build_user_message(self, report: SessionReport) -> str:
+        s = report.summary
+        duration_min = max(report.duration_seconds / 60.0, 1 / 60)
+        filler_total = sum(s.filler_counts.values())
+        filler_rate = filler_total / max(s.total_words, 1)
+        pauses_per_min = s.total_pauses / duration_min
+        eye = f"{s.avg_eye_contact * 100:.0f}%" if s.avg_eye_contact is not None else "n/a"
+        filler_list = ", ".join(f'"{w}" ({n})' for w, n in s.filler_counts.items()) or "none"
+        prompt_line = report.prompt or "(no prompt — freestyle)"
+        target = (
+            f"{report.target_duration_seconds:.0f}s"
+            if report.target_duration_seconds else "freestyle (no target)"
+        )
+
+        return (
+            "SESSION METRICS\n"
+            f"- Duration: {report.duration_seconds:.0f}s (target: {target})\n"
+            f"- Words spoken: {s.total_words}\n"
+            f"- Pace: avg {s.avg_wpm:.0f} WPM, peak {s.peak_wpm:.0f} WPM\n"
+            f"- Fillers: {filler_list}, total {filler_total} ({filler_rate * 100:.1f}% of words)\n"
+            f"- Pauses (>1.5s): {s.total_pauses} ({pauses_per_min:.1f}/min)\n"
+            f"- Eye contact: {eye}\n\n"
+            f"PROMPT THE USER ANSWERED:\n{prompt_line}\n\n"
+            f"FULL TRANSCRIPT:\n{report.full_transcript or '(no speech captured)'}\n\n"
+            f"{_OLLAMA_HEURISTIC_REFERENCE}\n\n"
+            "Return JSON matching the provided schema. Keep overall to 2-3 sentences, "
+            "strengths to 2-3 short items, and each focus's fix to one concrete action."
         )
 
 
@@ -318,7 +415,12 @@ def get_feedback_provider() -> FeedbackProvider:
     name = settings.feedback_provider.lower()
     if name == "mock":
         return MockFeedbackProvider()
+    if name == "ollama":
+        return OllamaFeedbackProvider(
+            base_url=settings.ollama_base_url,
+            model=settings.ollama_model,
+        )
     raise ValueError(
         f"Unknown feedback_provider: {settings.feedback_provider!r}. "
-        f"Supported: mock"
+        f"Supported: mock, ollama"
     )
