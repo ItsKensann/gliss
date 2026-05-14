@@ -6,10 +6,13 @@ output during development without spending API credits or running a local model.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from time import perf_counter
 from typing import Protocol
 
+import httpx
 from ollama import AsyncClient, ResponseError
 from pydantic import ValidationError
 
@@ -106,23 +109,7 @@ class MockFeedbackProvider:
 
 
 _OLLAMA_SYSTEM_PROMPT = (
-    "You are a friendly, specific speech coach. The user just finished a "
-    "practice recording. Produce concise, actionable feedback grounded ONLY "
-    "in the transcript and metrics provided — never invent facts the user "
-    "did not say. Pick ONE priority_focus and 1-2 secondary_focuses from: "
-    "fillers, pace, pauses, clarity, structure, delivery, eye_contact. "
-    "Be encouraging but honest. Quote a short transcript excerpt in a focus "
-    "when it makes the observation concrete; otherwise omit the excerpt. "
-    "Every string value must be natural coaching language; never use placeholder "
-    "values like 0, 1, n/a, unknown, or filler text."
-)
-
-_OLLAMA_HEURISTIC_REFERENCE = (
-    "Reference thresholds (for calibration, not rigid rules): "
-    "filler rate >4% is high, <1.5% is clean. "
-    "WPM 170+ is fast, <110 is slow, 140-160 is comfortable. "
-    "Pauses/min <0.5 is sparse, 1-2 is balanced. "
-    "Eye contact <60% is low, >=80% is strong."
+    "You are a concise speech coach. Return valid JSON only."
 )
 
 
@@ -135,12 +122,28 @@ class OllamaFeedbackProvider:
     generated_by so the source is traceable.
     """
 
-    def __init__(self, base_url: str, model: str) -> None:
-        self._client = AsyncClient(host=base_url)
+    def __init__(self, base_url: str, model: str, timeout_seconds: float | None = None) -> None:
+        self._timeout_seconds = (
+            timeout_seconds if timeout_seconds is not None else settings.ollama_timeout_seconds
+        )
+        self._client = AsyncClient(
+            host=base_url,
+            timeout=self._timeout_seconds,
+        )
+        self._base_url = base_url
         self._model = model
         self._fallback = MockFeedbackProvider()
 
     async def generate(self, report: SessionReport) -> StructuredFeedback | None:
+        started = perf_counter()
+        logger.info(
+            "Ollama feedback started: provider=ollama model=%s base_url=%s timeout_seconds=%.1f transcript_chars=%d words=%d",
+            self._model,
+            self._base_url,
+            self._timeout_seconds,
+            len(report.full_transcript or ""),
+            report.summary.total_words,
+        )
         try:
             user_msg = self._build_user_message(report)
             resp = await self._client.chat(
@@ -150,25 +153,50 @@ class OllamaFeedbackProvider:
                     {"role": "user", "content": user_msg},
                 ],
                 format=_ollama_feedback_schema(),
-                options={"temperature": 0.4},
+                options={"temperature": 0.2, "num_predict": 160},
             )
             raw = resp["message"]["content"]
             payload = json.loads(raw)
-            payload["generated_by"] = f"ollama:{self._model}"
-            payload.setdefault("feedback_version", FEEDBACK_VERSION)
-            feedback = StructuredFeedback.model_validate(payload)
+            feedback = self._expand_ollama_payload(payload)
+            logger.info(
+                "Ollama feedback succeeded: provider=ollama model=%s elapsed_ms=%.1f",
+                self._model,
+                (perf_counter() - started) * 1000,
+            )
             return feedback
-        except (ResponseError, ValidationError, json.JSONDecodeError, OSError) as e:
+        except (
+            TimeoutError,
+            asyncio.TimeoutError,
+            httpx.HTTPError,
+            ResponseError,
+            ValidationError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            OSError,
+        ) as e:
             logger.warning(
-                "Ollama feedback failed (%s: %s); falling back to mock",
-                type(e).__name__, e,
+                "Ollama feedback falling back: provider=ollama model=%s elapsed_ms=%.1f error_type=%s error=%s",
+                self._model,
+                (perf_counter() - started) * 1000,
+                type(e).__name__,
+                e,
             )
         except Exception:
-            logger.exception("Unexpected Ollama failure; falling back to mock")
+            logger.exception(
+                "Unexpected Ollama failure; falling back to mock: provider=ollama model=%s elapsed_ms=%.1f",
+                self._model,
+                (perf_counter() - started) * 1000,
+            )
 
         fallback = await self._fallback.generate(report)
         if fallback is not None:
             fallback.generated_by = "mock-fallback"
+            logger.info(
+                "Ollama feedback fallback generated: provider=mock-fallback model=%s elapsed_ms=%.1f",
+                self._model,
+                (perf_counter() - started) * 1000,
+            )
         return fallback
 
     def _build_user_message(self, report: SessionReport) -> str:
@@ -186,78 +214,113 @@ class OllamaFeedbackProvider:
         )
 
         return (
-            "SESSION METRICS\n"
-            f"- Duration: {report.duration_seconds:.0f}s (target: {target})\n"
-            f"- Words spoken: {s.total_words}\n"
-            f"- Pace: avg {s.avg_wpm:.0f} WPM, peak {s.peak_wpm:.0f} WPM\n"
-            f"- Fillers: {filler_list}, total {filler_total} ({filler_rate * 100:.1f}% of words)\n"
-            f"- Pauses (>1.5s): {s.total_pauses} ({pauses_per_min:.1f}/min)\n"
-            f"- Eye contact: {eye}\n\n"
-            f"PROMPT THE USER ANSWERED:\n{prompt_line}\n\n"
-            f"FULL TRANSCRIPT:\n{report.full_transcript or '(no speech captured)'}\n\n"
-            f"{_OLLAMA_HEURISTIC_REFERENCE}\n\n"
-            "Return JSON matching the provided schema. Keep overall to 2-3 sentences, "
-            "strengths to 2-3 short items, and each focus's fix to one concrete action. "
-            "Do not include generated_by or feedback_version; the app fills those in."
+            f"Metrics: {report.duration_seconds:.0f}s target {target}. "
+            f"{s.total_words} words. Avg {s.avg_wpm:.0f} WPM, peak {s.peak_wpm:.0f}. "
+            f"Fillers {filler_list}, total {filler_total} ({filler_rate * 100:.1f}%). "
+            f"Pauses {s.total_pauses} ({pauses_per_min:.1f}/min). Eye contact {eye}. "
+            f"Prompt: {prompt_line}. "
+            f"Transcript: {report.full_transcript or '(no speech captured)'} "
+            "Pick priority_area from fillers, pace, pauses, clarity, structure, "
+            "delivery, eye_contact. Keep overall under 25 words. Keep observation "
+            "and fix under 15 words."
         )
 
+    def _expand_ollama_payload(self, payload: dict) -> StructuredFeedback:
+        priority = _ollama_payload_focus(
+            area=payload["priority_area"],
+            observation=payload["observation"],
+            fix=payload["fix"],
+        )
+        strengths = _clean_string_list(
+            [payload.get("strength")],
+            fallback="You completed a practice rep, which gives you something concrete to improve.",
+            max_items=1,
+        )
 
-def _focus_schema() -> dict:
+        return StructuredFeedback.model_validate({
+            "overall": _clean_string(
+                payload["overall"],
+                "This session gives you a clear next practice target.",
+            ),
+            "strengths": strengths,
+            "priority_focus": priority.model_dump(),
+            "secondary_focuses": [],
+            "drill_suggestion": _drill_for(priority.area),
+            "encouragement": (
+                "Use the priority focus for one short rep, then review the next recording."
+            ),
+            "feedback_version": FEEDBACK_VERSION,
+            "generated_by": f"ollama:{self._model}",
+        })
+
+
+def _focus_area_schema() -> dict:
     return {
-        "type": "object",
-        "properties": {
-            "area": {
-                "type": "string",
-                "enum": [
-                    "fillers",
-                    "pace",
-                    "pauses",
-                    "clarity",
-                    "structure",
-                    "delivery",
-                    "eye_contact",
-                ],
-            },
-            "observation": {"type": "string"},
-            "why_it_matters": {"type": "string"},
-            "fix": {"type": "string"},
-            "excerpt": {"type": "string"},
-        },
-        "required": ["area", "observation", "why_it_matters", "fix"],
+        "type": "string",
+        "enum": [
+            "fillers",
+            "pace",
+            "pauses",
+            "clarity",
+            "structure",
+            "delivery",
+            "eye_contact",
+        ],
     }
 
 
 def _ollama_feedback_schema() -> dict:
-    focus = _focus_schema()
+    area = _focus_area_schema()
     return {
         "type": "object",
         "properties": {
-            "overall": {"type": "string"},
-            "strengths": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 1,
-                "maxItems": 3,
-            },
-            "priority_focus": focus,
-            "secondary_focuses": {
-                "type": "array",
-                "items": focus,
-                "minItems": 0,
-                "maxItems": 2,
-            },
-            "drill_suggestion": {"type": "string"},
-            "encouragement": {"type": "string"},
+            "overall": {"type": "string", "maxLength": 160},
+            "strength": {"type": "string", "maxLength": 90},
+            "priority_area": area,
+            "observation": {"type": "string", "maxLength": 120},
+            "fix": {"type": "string", "maxLength": 120},
         },
         "required": [
             "overall",
-            "strengths",
-            "priority_focus",
-            "secondary_focuses",
-            "drill_suggestion",
-            "encouragement",
+            "strength",
+            "priority_area",
+            "observation",
+            "fix",
         ],
     }
+
+
+def _ollama_payload_focus(*, area: object, observation: object, fix: object) -> Focus:
+    return Focus.model_validate({
+        "area": area,
+        "observation": _clean_string(
+            observation,
+            "The session shows one pattern worth practicing next.",
+        ),
+        "why_it_matters": _why_it_matters_for(area),
+        "fix": _clean_string(
+            fix,
+            "Repeat the answer once while focusing on this single adjustment.",
+        ),
+    })
+
+
+def _clean_string(value: object, fallback: str) -> str:
+    if not isinstance(value, str):
+        return fallback
+    text = value.strip()
+    return text or fallback
+
+
+def _clean_string_list(value: object, *, fallback: str, max_items: int) -> list[str]:
+    if not isinstance(value, list):
+        return [fallback]
+    cleaned = [
+        item.strip()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+    return cleaned[:max_items] or [fallback]
 
 
 def _pick_focuses(
@@ -409,6 +472,18 @@ def _overall_summary(
     )
 
 
+def _why_it_matters_for(area: FocusArea) -> str:
+    return {
+        "fillers": "Fillers can blur the main point when they repeat in key moments.",
+        "pace": "Pace shapes how easily listeners can follow and absorb the answer.",
+        "pauses": "Pauses give the listener time to process and give you a clean reset.",
+        "clarity": "Clear wording makes the answer easier to remember after the session.",
+        "structure": "Structure helps the listener track the point, evidence, and takeaway.",
+        "delivery": "Delivery affects how confident and intentional the message feels.",
+        "eye_contact": "Camera contact makes the delivery feel more direct and connected.",
+    }[area]
+
+
 def _drill_for(area: FocusArea) -> str:
     return {
         "fillers": (
@@ -481,6 +556,7 @@ def get_feedback_provider() -> FeedbackProvider:
         return OllamaFeedbackProvider(
             base_url=settings.ollama_base_url,
             model=settings.ollama_model,
+            timeout_seconds=settings.ollama_timeout_seconds,
         )
     raise ValueError(
         f"Unknown feedback_provider: {settings.feedback_provider!r}. "

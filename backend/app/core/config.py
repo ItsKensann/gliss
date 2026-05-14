@@ -13,7 +13,9 @@ class Settings(BaseSettings):
     # via the Ollama HTTP API; on any failure it falls back to mock internally.
     feedback_provider: str = "mock"
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1:8b"
+    ollama_model: str = "llama3:latest"
+    ollama_timeout_seconds: float = 45.0
+    feedback_timeout_seconds: float = 60.0
 
     class Config:
         env_file = ".env"
