@@ -28,7 +28,12 @@
       "Bash(python *)",
       "Bash(xargs grep -l \"segments\")",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 40)",
-      "PowerShell(..\\\\backend\\\\.venv\\\\Scripts\\\\python.exe -c \"import sys; sys.path.insert\\(0, '..\\\\backend'\\); from app.core import progress; from app.models.session import FinalizationProgress; from app.api.routes import report, session; print\\('imports ok'\\)\")"
+      "PowerShell(..\\\\backend\\\\.venv\\\\Scripts\\\\python.exe -c \"import sys; sys.path.insert\\(0, '..\\\\backend'\\); from app.core import progress; from app.models.session import FinalizationProgress; from app.api.routes import report, session; print\\('imports ok'\\)\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\(r'backend\\\\app\\\\services\\\\feedback.py', encoding='utf-8'\\).read\\(\\)\\); print\\('feedback.py: ok'\\); ast.parse\\(open\\(r'backend\\\\app\\\\core\\\\config.py', encoding='utf-8'\\).read\\(\\)\\); print\\('config.py: ok'\\)\")",
+      "PowerShell(& \"backend\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import ast; ast.parse\\(open\\(r'backend\\\\app\\\\services\\\\feedback.py', encoding='utf-8'\\).read\\(\\)\\); print\\('feedback.py: ok'\\); ast.parse\\(open\\(r'backend\\\\app\\\\core\\\\config.py', encoding='utf-8'\\).read\\(\\)\\); print\\('config.py: ok'\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import ast; ast.parse\\(open\\(r'C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\\\\backend\\\\app\\\\services\\\\feedback.py', encoding='utf-8'\\).read\\(\\)\\); print\\('feedback.py: ok'\\); ast.parse\\(open\\(r'C:\\\\Users\\\\ItsKe\\\\OneDrive\\\\Desktop\\\\computer_science\\\\personal_projects\\\\gliss\\\\backend\\\\app\\\\core\\\\config.py', encoding='utf-8'\\).read\\(\\)\\); print\\('config.py: ok'\\)\")"
     ]
   }
 }

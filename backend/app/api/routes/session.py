@@ -8,6 +8,7 @@ from time import perf_counter
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.core import progress
+from app.core.config import settings
 from app.models.session import AnalysisResult, FaceMetrics, Pause, SessionReport
 from app.services.audio_analysis import (
     AudioAnalysisService,
@@ -52,6 +53,88 @@ def _report_debug_stats(report: SessionReport) -> dict:
         "peak_wpm": report.summary.peak_wpm,
         "pace_events": len(report.pace_events),
     }
+
+
+async def _attach_structured_feedback(
+    *,
+    session_id: str,
+    report: SessionReport,
+    feedback_provider: object,
+    timeout_seconds: float | None = None,
+) -> None:
+    timeout = timeout_seconds if timeout_seconds is not None else settings.feedback_timeout_seconds
+    feedback_started = perf_counter()
+
+    def _consume_task_exception(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.exception()
+        except Exception:
+            pass
+
+    logger.info(
+        "Session %s feedback generation started: provider=%s timeout_seconds=%.1f transcript_chars=%d words=%d",
+        session_id,
+        type(feedback_provider).__name__,
+        timeout,
+        len(report.full_transcript or ""),
+        report.summary.total_words,
+    )
+    try:
+        feedback_task = asyncio.create_task(feedback_provider.generate(report))
+        done, pending = await asyncio.wait({feedback_task}, timeout=timeout)
+        if pending:
+            feedback_task.cancel()
+            feedback_task.add_done_callback(_consume_task_exception)
+            logger.warning(
+                "Session %s feedback hard timeout: provider=%s timeout_seconds=%.1f elapsed_ms=%.1f",
+                session_id,
+                type(feedback_provider).__name__,
+                timeout,
+                (perf_counter() - feedback_started) * 1000,
+            )
+            return
+
+        feedback = done.pop().result()
+        if feedback is not None:
+            report.structured_feedback = feedback
+            logger.info(
+                "Session %s feedback generated: provider=%s elapsed_ms=%.1f",
+                session_id,
+                feedback.generated_by,
+                (perf_counter() - feedback_started) * 1000,
+            )
+        else:
+            logger.warning(
+                "Session %s feedback provider returned no feedback: provider=%s elapsed_ms=%.1f",
+                session_id,
+                type(feedback_provider).__name__,
+                (perf_counter() - feedback_started) * 1000,
+            )
+    except Exception:
+        logger.exception(
+            "Feedback provider failed for session %s; saving without it",
+            session_id,
+        )
+
+
+async def _save_finalized_report(
+    *,
+    session_id: str,
+    report: SessionReport,
+    feedback_provider: object,
+    timeout_seconds: float | None = None,
+) -> None:
+    progress.update(session_id, "feedback_generation", 92.0)
+    await _attach_structured_feedback(
+        session_id=session_id,
+        report=report,
+        feedback_provider=feedback_provider,
+        timeout_seconds=timeout_seconds,
+    )
+    progress.update(session_id, "finalized_save", 97.0)
+    save_report(report)
 
 
 def _average_face_metrics(
@@ -416,25 +499,13 @@ async def session_websocket(
             # preliminary save exists purely to unblock the frontend's poll,
             # and the metrics it sees aren't yet authoritative.
             if is_finalized:
-                progress.update(session_id, "feedback_generation", 92.0)
-                feedback_started = perf_counter()
-                try:
-                    feedback = await feedback_provider.generate(report)
-                    if feedback is not None:
-                        report.structured_feedback = feedback
-                        logger.info(
-                            "Session %s feedback generated: provider=%s elapsed_ms=%.1f",
-                            session_id,
-                            feedback.generated_by,
-                            (perf_counter() - feedback_started) * 1000,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Feedback provider failed for session %s; saving without it",
-                        session_id,
-                    )
-                progress.update(session_id, "finalized_save", 97.0)
-            save_report(report)
+                await _save_finalized_report(
+                    session_id=session_id,
+                    report=report,
+                    feedback_provider=feedback_provider,
+                )
+            else:
+                save_report(report)
             logger.info(
                 "Session %s report save complete: finalized=%s save_ms=%.1f stats=%s",
                 session_id,

@@ -9,8 +9,13 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     # Which post-session coaching backend to use. "mock" returns heuristic-derived
-    # feedback for free during development. Future values: "claude", "ollama".
+    # feedback for free during development. "ollama" calls a locally-hosted LLM
+    # via the Ollama HTTP API; on any failure it falls back to mock internally.
     feedback_provider: str = "mock"
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3:latest"
+    ollama_timeout_seconds: float = 45.0
+    feedback_timeout_seconds: float = 60.0
 
     class Config:
         env_file = ".env"
