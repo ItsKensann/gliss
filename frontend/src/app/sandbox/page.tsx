@@ -122,8 +122,11 @@ export default function SandboxPage() {
   })()
 
   return (
-    <main className="min-h-screen px-4 py-10">
-      <div className="max-w-xl mx-auto">
+    <main className="min-h-screen px-4 py-10 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.12),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_bottom,rgba(59,130,246,0.08),transparent_60%)]" />
+
+      <div className="relative max-w-xl mx-auto">
         <Link
           href="/practice"
           className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-200 transition-colors mb-8"
@@ -134,160 +137,167 @@ export default function SandboxPage() {
           Back
         </Link>
 
-        <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">Sandbox</h1>
-          <p className="text-gray-400 mt-2 text-sm">Pick a prompt or go freestyle, then start speaking.</p>
-        </header>
+        <div className="relative">
+          <div className="absolute -inset-8 rounded-[2rem] bg-gradient-to-br from-indigo-500/25 via-indigo-400/15 to-blue-500/25 blur-3xl opacity-70 pointer-events-none" />
+          <div className="relative rounded-3xl bg-gradient-to-br from-indigo-400/60 via-indigo-300/30 to-blue-400/60 p-[1.5px] shadow-[0_0_60px_-15px_rgba(99,102,241,0.45)]">
+            <div className="rounded-3xl bg-gray-950/90 backdrop-blur-sm px-6 sm:px-8 py-8">
+              <header className="mb-8">
+                <h1 className="text-3xl font-semibold tracking-tight bg-gradient-to-br from-white via-indigo-200 to-blue-300 bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(99,102,241,0.25)]">Sandbox</h1>
+                <p className="text-gray-400 mt-2 text-sm">Pick a prompt or go freestyle, then start speaking.</p>
+              </header>
 
-        <section className="rounded-2xl bg-gray-900/50 ring-1 ring-white/10 divide-y divide-white/5 mb-8">
-          <SettingRow
-            label="Duration"
-            hint="How long the session runs before auto-stop."
-          >
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  value={selectValue}
-                  onChange={(e) => onDurationChange(e.target.value)}
-                  className="appearance-none bg-gray-800/80 border border-white/10 rounded-lg pl-3 pr-9 py-2 text-sm text-gray-100 hover:bg-gray-700/80 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 transition-colors cursor-pointer"
+              <section className="rounded-2xl bg-gray-900/40 ring-1 ring-white/5 divide-y divide-white/5 mb-8">
+                <SettingRow
+                  label="Duration"
+                  hint="How long the session runs before auto-stop."
                 >
-                  {DURATION_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z" clipRule="evenodd" />
-                </svg>
-              </div>
-              {isCustomDuration && (
-                <div className="flex items-center gap-1 text-sm text-gray-400">
-                  <input
-                    ref={customMinRef}
-                    type="number"
-                    min={0}
-                    max={120}
-                    step={1}
-                    inputMode="numeric"
-                    value={customMin}
-                    onChange={(e) => onCustomMinChange(e.target.value)}
-                    className="w-14 px-2 py-2 rounded-lg bg-gray-800/80 border border-white/10 text-center tabular-nums text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
-                  />
-                  <span className="text-xs">min</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
-                    step={1}
-                    inputMode="numeric"
-                    value={customSec}
-                    onChange={(e) => onCustomSecChange(e.target.value)}
-                    className="w-14 px-2 py-2 rounded-lg bg-gray-800/80 border border-white/10 text-center tabular-nums text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 ml-1"
-                  />
-                  <span className="text-xs">sec</span>
-                </div>
-              )}
-            </div>
-          </SettingRow>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <select
+                        value={selectValue}
+                        onChange={(e) => onDurationChange(e.target.value)}
+                        className="appearance-none bg-gray-800/80 border border-white/10 rounded-lg pl-3 pr-9 py-2 text-sm text-gray-100 hover:bg-gray-700/80 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 transition-colors cursor-pointer"
+                      >
+                        {DURATION_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    {isCustomDuration && (
+                      <div className="flex items-center gap-1 text-sm text-gray-400">
+                        <input
+                          ref={customMinRef}
+                          type="number"
+                          min={0}
+                          max={120}
+                          step={1}
+                          inputMode="numeric"
+                          value={customMin}
+                          onChange={(e) => onCustomMinChange(e.target.value)}
+                          className="w-14 px-2 py-2 rounded-lg bg-gray-800/80 border border-white/10 text-center tabular-nums text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                        />
+                        <span className="text-xs">min</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={59}
+                          step={1}
+                          inputMode="numeric"
+                          value={customSec}
+                          onChange={(e) => onCustomSecChange(e.target.value)}
+                          className="w-14 px-2 py-2 rounded-lg bg-gray-800/80 border border-white/10 text-center tabular-nums text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400/40 ml-1"
+                        />
+                        <span className="text-xs">sec</span>
+                      </div>
+                    )}
+                  </div>
+                </SettingRow>
 
-          <SettingRow
-            label="Camera"
-            hint="Required for eye-contact tracking."
-          >
-            <button
-              type="button"
-              role="switch"
-              aria-checked={withCamera}
-              onClick={() => chooseCamera(!withCamera)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
-                withCamera ? "bg-indigo-500" : "bg-gray-700"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                  withCamera ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </SettingRow>
-        </section>
-
-        <section className="mb-10">
-          <div className="flex items-baseline justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-medium text-gray-200">Prompt</h2>
-              <p className="text-xs text-gray-500 mt-0.5">What you&apos;ll talk about during the session.</p>
-            </div>
-            <button
-              onClick={surpriseMe}
-              className="text-xs font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
-            >
-              Surprise me →
-            </button>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <CategoryChip
-              label="Freestyle"
-              active={promptId === null}
-              onClick={() => choosePrompt(null)}
-            />
-            {CATEGORIES.map((cat) => (
-              <CategoryChip
-                key={cat}
-                label={cat}
-                active={category === cat && promptId !== null}
-                onClick={() => chooseCategory(cat)}
-              />
-            ))}
-          </div>
-
-          {promptId !== null ? (
-            <div className="space-y-1.5">
-              {promptsForCategory.map((p) => {
-                const selected = p.id === promptId
-                return (
+                <SettingRow
+                  label="Camera"
+                  hint="Required for eye-contact tracking."
+                >
                   <button
-                    key={p.id}
-                    onClick={() => choosePrompt(p.id)}
-                    className={`flex items-start gap-3 w-full text-left px-4 py-3 rounded-xl text-sm border transition-colors ${
-                      selected
-                        ? "bg-indigo-500/10 border-indigo-400/50 text-indigo-50"
-                        : "bg-gray-900/40 border-white/10 text-gray-300 hover:bg-gray-800/60 hover:border-white/20"
+                    type="button"
+                    role="switch"
+                    aria-checked={withCamera}
+                    onClick={() => chooseCamera(!withCamera)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-950 ${
+                      withCamera ? "bg-indigo-500" : "bg-gray-700"
                     }`}
                   >
                     <span
-                      className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
-                        selected ? "border-indigo-300" : "border-gray-600"
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        withCamera ? "translate-x-6" : "translate-x-1"
                       }`}
-                    >
-                      {selected && <span className="w-2 h-2 rounded-full bg-indigo-300" />}
-                    </span>
-                    <span className="flex-1">{p.text}</span>
+                    />
                   </button>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-500 italic px-1">No prompt — talk about whatever you want.</p>
-          )}
-        </section>
+                </SettingRow>
+              </section>
 
-        {isStartDisabled ? (
-          <button
-            type="button"
-            disabled
-            className="block w-full text-center bg-gray-800 text-gray-500 px-6 py-3.5 rounded-xl font-medium cursor-not-allowed"
-          >
-            Set a duration to start
-          </button>
-        ) : (
-          <Link
-            href={startHref}
-            className="block w-full text-center bg-indigo-500 hover:bg-indigo-600 active:scale-[0.99] text-white px-6 py-3.5 rounded-xl font-medium transition-all duration-150 shadow-lg shadow-indigo-500/20"
-          >
-            Start session
-          </Link>
-        )}
+              <section className="mb-10">
+                <div className="flex items-baseline justify-between mb-3">
+                  <div>
+                    <h2 className="text-sm font-medium text-gray-200">Prompt</h2>
+                    <p className="text-xs text-gray-500 mt-0.5">What you&apos;ll talk about during the session.</p>
+                  </div>
+                  <button
+                    onClick={surpriseMe}
+                    className="text-xs font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
+                  >
+                    Surprise me →
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <CategoryChip
+                    label="Freestyle"
+                    active={promptId === null}
+                    onClick={() => choosePrompt(null)}
+                  />
+                  {CATEGORIES.map((cat) => (
+                    <CategoryChip
+                      key={cat}
+                      label={cat}
+                      active={category === cat && promptId !== null}
+                      onClick={() => chooseCategory(cat)}
+                    />
+                  ))}
+                </div>
+
+                {promptId !== null ? (
+                  <div className="space-y-1.5">
+                    {promptsForCategory.map((p) => {
+                      const selected = p.id === promptId
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => choosePrompt(p.id)}
+                          className={`flex items-start gap-3 w-full text-left px-4 py-3 rounded-xl text-sm border transition-colors ${
+                            selected
+                              ? "bg-indigo-500/10 border-indigo-400/50 text-indigo-50"
+                              : "bg-gray-900/40 border-white/10 text-gray-300 hover:bg-gray-800/60 hover:border-white/20"
+                          }`}
+                        >
+                          <span
+                            className={`mt-0.5 w-4 h-4 rounded-full border flex-shrink-0 flex items-center justify-center transition-colors ${
+                              selected ? "border-indigo-300" : "border-gray-600"
+                            }`}
+                          >
+                            {selected && <span className="w-2 h-2 rounded-full bg-indigo-300" />}
+                          </span>
+                          <span className="flex-1">{p.text}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic px-1">No prompt — talk about whatever you want.</p>
+                )}
+              </section>
+
+              {isStartDisabled ? (
+                <button
+                  type="button"
+                  disabled
+                  className="block w-full text-center bg-gray-800 text-gray-500 px-6 py-3.5 rounded-xl font-medium cursor-not-allowed"
+                >
+                  Set a duration to start
+                </button>
+              ) : (
+                <Link
+                  href={startHref}
+                  className="block w-full text-center bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-400 hover:to-blue-400 active:scale-[0.99] text-white px-6 py-3.5 rounded-xl font-medium transition-all duration-150 shadow-lg shadow-blue-500/20"
+                >
+                  Start session
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   )
