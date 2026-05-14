@@ -112,7 +112,9 @@ _OLLAMA_SYSTEM_PROMPT = (
     "did not say. Pick ONE priority_focus and 1-2 secondary_focuses from: "
     "fillers, pace, pauses, clarity, structure, delivery, eye_contact. "
     "Be encouraging but honest. Quote a short transcript excerpt in a focus "
-    "when it makes the observation concrete; otherwise omit the excerpt."
+    "when it makes the observation concrete; otherwise omit the excerpt. "
+    "Every string value must be natural coaching language; never use placeholder "
+    "values like 0, 1, n/a, unknown, or filler text."
 )
 
 _OLLAMA_HEURISTIC_REFERENCE = (
@@ -141,19 +143,20 @@ class OllamaFeedbackProvider:
     async def generate(self, report: SessionReport) -> StructuredFeedback | None:
         try:
             user_msg = self._build_user_message(report)
-            schema = StructuredFeedback.model_json_schema()
             resp = await self._client.chat(
                 model=self._model,
                 messages=[
                     {"role": "system", "content": _OLLAMA_SYSTEM_PROMPT},
                     {"role": "user", "content": user_msg},
                 ],
-                format=schema,
+                format=_ollama_feedback_schema(),
                 options={"temperature": 0.4},
             )
             raw = resp["message"]["content"]
-            feedback = StructuredFeedback.model_validate_json(raw)
-            feedback.generated_by = f"ollama:{self._model}"
+            payload = json.loads(raw)
+            payload["generated_by"] = f"ollama:{self._model}"
+            payload.setdefault("feedback_version", FEEDBACK_VERSION)
+            feedback = StructuredFeedback.model_validate(payload)
             return feedback
         except (ResponseError, ValidationError, json.JSONDecodeError, OSError) as e:
             logger.warning(
@@ -194,8 +197,67 @@ class OllamaFeedbackProvider:
             f"FULL TRANSCRIPT:\n{report.full_transcript or '(no speech captured)'}\n\n"
             f"{_OLLAMA_HEURISTIC_REFERENCE}\n\n"
             "Return JSON matching the provided schema. Keep overall to 2-3 sentences, "
-            "strengths to 2-3 short items, and each focus's fix to one concrete action."
+            "strengths to 2-3 short items, and each focus's fix to one concrete action. "
+            "Do not include generated_by or feedback_version; the app fills those in."
         )
+
+
+def _focus_schema() -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "area": {
+                "type": "string",
+                "enum": [
+                    "fillers",
+                    "pace",
+                    "pauses",
+                    "clarity",
+                    "structure",
+                    "delivery",
+                    "eye_contact",
+                ],
+            },
+            "observation": {"type": "string"},
+            "why_it_matters": {"type": "string"},
+            "fix": {"type": "string"},
+            "excerpt": {"type": "string"},
+        },
+        "required": ["area", "observation", "why_it_matters", "fix"],
+    }
+
+
+def _ollama_feedback_schema() -> dict:
+    focus = _focus_schema()
+    return {
+        "type": "object",
+        "properties": {
+            "overall": {"type": "string"},
+            "strengths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 3,
+            },
+            "priority_focus": focus,
+            "secondary_focuses": {
+                "type": "array",
+                "items": focus,
+                "minItems": 0,
+                "maxItems": 2,
+            },
+            "drill_suggestion": {"type": "string"},
+            "encouragement": {"type": "string"},
+        },
+        "required": [
+            "overall",
+            "strengths",
+            "priority_focus",
+            "secondary_focuses",
+            "drill_suggestion",
+            "encouragement",
+        ],
+    }
 
 
 def _pick_focuses(
